@@ -1,6 +1,6 @@
 ---
 name: write-commit
-description: "Write commit messages and pull request descriptions that follow these projects' shared conventions — short lowercase conventional-style prefixes (feat:/fix:/refactor:/perf:/chore:/style:), focused imperative subjects, and a PR body covering summary, linked issue, and local-check confirmation. Use when the user asks to commit changes, write a commit message, or open/describe a pull request."
+description: "Write commit messages and pull request descriptions that follow these projects' shared conventions — short lowercase conventional-style prefixes (feat:/fix:/refactor:/perf:/chore:), focused imperative subjects, and a PR body covering summary, linked issue, and local-check confirmation. Use when the user asks to commit changes, write a commit message, or open/describe a pull request."
 ---
 
 # write-commit
@@ -38,10 +38,9 @@ description: "Write commit messages and pull request descriptions that follow th
 | `feat:` | **機能・要素の追加はすべてこれに統一**（規模の大小を問わない） | `feat: PrimitiveButton ベースコンポーネントを追加` / `feat: home latest works` |
 | `refactor:` | ランタイム挙動は変えないが、コード構造・型表現を変更する（`import type` 化・型注釈の追加・リネーム・抽出など） | `refactor: type のみで使用する import に type 修飾子を付与` |
 | `perf:` | パフォーマンス改善 | `perf: 静的アセットに immutable な Cache-Control を付与` |
-| `chore:` | 雑務・作業ドキュメント整理など | `chore: remove migration working docs` |
-| `style:` | フォーマッタ領域の純粋な整形のみ（空白・改行・引用符・セミコロン・import 順序など）。コードの構造・型表現は変えない | `style: 長い三項演算子の改行を整える` |
+| `chore:` | 雑務・作業ドキュメント整理・純粋な整形のみのコミットなど | `chore: remove migration working docs` |
 
-> **`style:` と `refactor:` の境界**: ランタイム挙動を変えない点は共通だが、**コードの構造・型表現に手を入れるなら `refactor:`、フォーマッタで機械的に直せる整形だけなら `style:`**。したがって `import type` 化・型修飾子の付与のような**型表現の変更は `refactor:` に統一する**（過去履歴では `style:` に分類された例もあるが、境界を明確にするため今後は `refactor:` に寄せる）。なお本プロジェクト群は oxfmt が整形を自動化するため、手書きの `style:` コミットは基本的に稀。
+> **`style:` は使わない。** 空白・引用符・import 順序などの整形は oxfmt が自動で行うため、整形だけの手書きコミットはほぼ発生しない。`import type` 化・型修飾子の付与のような**型表現・構造の変更は `refactor:`**（過去履歴に `style:` の例があるが今後は `refactor:` に統一）、フォーマッタで機械的に直せる整形のみが残る稀なケースは `chore:` に寄せる。
 
 > **`add:` は使わない（旧慣習）。** 過去の履歴には `add:` が多数あるが、Conventional Commits 標準外で `feat:` との境界も曖昧なため、新規コミットでは追加は必ず `feat:` に寄せる。過去コミットの書き換えは不要。既存の `add:` を見ても真似しない。
 
