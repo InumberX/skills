@@ -18,6 +18,8 @@ from pathlib import Path
 
 _SCRIPT = Path(__file__).resolve().parent.parent / "scripts" / "validate_skills.py"
 _spec = importlib.util.spec_from_file_location("validate_skills", _SCRIPT)
+if _spec is None or _spec.loader is None:
+    raise ImportError(f"cannot load validate_skills module from {_SCRIPT}")
 validate_skills = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(validate_skills)
 
