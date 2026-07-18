@@ -1,6 +1,6 @@
 ---
 name: write-commit
-description: "Write commit messages and pull request descriptions that follow these projects' shared conventions — short lowercase conventional-style prefixes (feat:/fix:/refactor:/perf:/chore:), focused imperative subjects, and a PR body covering summary, linked issue, and local-check confirmation. Use when the user asks to commit changes, write a commit message, or open/describe a pull request."
+description: "Write commit messages and pull request descriptions that follow these projects' shared conventions — short lowercase conventional-style prefixes (feat:/fix:/refactor:/perf:/docs:/test:/ci:/build:/chore:/revert:, with chore(deps): for dependency updates), focused imperative subjects, and a PR body covering summary, linked issue, and local-check confirmation. Use when the user asks to commit changes, write a commit message, or open/describe a pull request."
 ---
 
 # write-commit
@@ -30,24 +30,32 @@ description: "Write commit messages and pull request descriptions that follow th
 
 ### プレフィックス語彙
 
-実際の履歴で使われているものに揃える:
+Conventional Commits の標準型に揃える（履歴で頻出のものを上に置く）:
 
 | プレフィックス | 用途 | 例 |
 |---|---|---|
-| `fix:` | バグ修正・既存挙動やスタイルの修正 | `fix: header mobile button` |
 | `feat:` | **機能・要素の追加はすべてこれに統一**（規模の大小を問わない） | `feat: PrimitiveButton ベースコンポーネントを追加` / `feat: home latest works` |
+| `fix:` | バグ修正・既存挙動やスタイルの修正 | `fix: header mobile button` |
 | `refactor:` | ランタイム挙動は変えないが、コード構造・型表現を変更する（`import type` 化・型注釈の追加・リネーム・抽出など） | `refactor: type のみで使用する import に type 修飾子を付与` |
 | `perf:` | パフォーマンス改善 | `perf: 静的アセットに immutable な Cache-Control を付与` |
-| `chore:` | 雑務・作業ドキュメント整理・純粋な整形のみのコミットなど | `chore: remove migration working docs` |
+| `docs:` | ドキュメントのみの変更（README・コードコメント・スキル本文など） | `docs: update readme` |
+| `test:` | テストの追加・修正のみ | `test: add BaseButton interaction tests` |
+| `ci:` | CI 設定・ワークフローの変更（`.github/workflows/` など） | `ci: add skill frontmatter validation` |
+| `build:` | ビルドシステム・ツール・設定の変更（vite / next / wrangler 設定、ビルドスクリプトなど）。**依存パッケージの更新は `chore(deps):`** を使う | `build: adjust vite config` |
+| `chore:` | 上記のどれにも当てはまらない雑務・作業ドキュメント整理・稀な純整形など | `chore: remove migration working docs` |
+| `revert:` | 以前のコミットの取り消し | `revert: feat: PrimitiveButton ベースコンポーネントを追加` |
+
+> **依存パッケージの更新は `chore(deps):`。** スコープ `(deps)` で依存更新であることを明示する（例: `chore(deps): update vite`）。過去履歴の `update library`（プレフィックスなし）は旧慣習で、今後は使わない。
 
 > **`style:` は使わない。** 空白・引用符・import 順序などの整形は oxfmt が自動で行うため、整形だけの手書きコミットはほぼ発生しない。`import type` 化・型修飾子の付与のような**型表現・構造の変更は `refactor:`**（過去履歴に `style:` の例があるが今後は `refactor:` に統一）、フォーマッタで機械的に直せる整形のみが残る稀なケースは `chore:` に寄せる。
 
 > **`add:` は使わない（旧慣習）。** 過去の履歴には `add:` が多数あるが、Conventional Commits 標準外で `feat:` との境界も曖昧なため、新規コミットでは追加は必ず `feat:` に寄せる。過去コミットの書き換えは不要。既存の `add:` を見ても真似しない。
 
-### プレフィックスなしの慣例
+### プレフィックスの選び方
 
-- **依存パッケージの更新は `update library` をプレフィックスなしで使う**（履歴で頻出の定型）。個別ライブラリ名を書き足してもよいが、基本はこの定型に合わせる。
-- それ以外で迷ったら上表のいずれかを付ける。無理に新しいプレフィックスを増やさない。
+- **必ず上表のいずれかのプレフィックスを付ける。** 迷ったら変更の主目的で選ぶ（挙動修正=`fix:`、機能追加=`feat:`、挙動を変えない構造変更=`refactor:`）。
+- **無理に新しいプレフィックスを増やさない。** 上表（Conventional Commits 標準型）で表現できないケースはまず `chore:` に寄せる。
+- 過去履歴に散見されるプレフィックスなしのコミット（`update library`、英文の平叙文など）は旧慣習。**今後は真似せず、必ずプレフィックスを付ける**（依存更新は `chore(deps):`）。
 
 > `(#NNN)` の PR 番号は squash マージ時に自動で付く。ローカルのコミット件名に手で付けない。
 
