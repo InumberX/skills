@@ -68,19 +68,36 @@ def check(skill_md: Path) -> list[str]:
     description = data.get("description")
     if not isinstance(description, str) or not description.strip():
         errors.append("`description` is missing or empty")
-    else:
-        # format.md: the description value must be wrapped in double quotes.
-        desc_line = next(
-            (ln for ln in front.splitlines() if ln.startswith("description:")), ""
+    elif description_scalar_style(front) != '"':
+        # format.md: the description value must be a double-quoted YAML scalar.
+        # Checked via the parsed scalar *style* (not a string prefix) so that a
+        # single-quoted or plain value that merely contains a double quote —
+        # e.g. description: '"x"' — cannot slip through.
+        errors.append(
+            "`description` must be a double-quoted YAML scalar "
+            "(see create-skill/rules/format.md)"
         )
-        value = desc_line[len("description:") :].strip()
-        if not value.startswith('"'):
-            errors.append(
-                "`description` value must be wrapped in double quotes "
-                "(see create-skill/rules/format.md)"
-            )
 
     return errors
+
+
+def description_scalar_style(front: str) -> str | None:
+    """Return the YAML scalar style of the `description` value.
+
+    `"` for double-quoted, `'` for single-quoted, `|`/`>` for block scalars,
+    and None for a plain (unquoted) scalar. Returns None if absent.
+    """
+    node = yaml.compose(front)
+    if not isinstance(node, yaml.MappingNode):
+        return None
+    for key_node, value_node in node.value:
+        if (
+            isinstance(key_node, yaml.ScalarNode)
+            and key_node.value == "description"
+            and isinstance(value_node, yaml.ScalarNode)
+        ):
+            return value_node.style
+    return None
 
 
 def main() -> int:
