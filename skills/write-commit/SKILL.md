@@ -1,6 +1,6 @@
 ---
 name: write-commit
-description: "Write commit messages and pull request descriptions that follow these projects' shared conventions — short lowercase conventional-style prefixes (feat:/fix:/refactor:/perf:/docs:/test:/ci:/build:/chore:/revert:, with chore(deps): for dependency updates), focused imperative subjects, and a PR body covering summary, linked issue, and local-check confirmation. Use when the user asks to commit changes, write a commit message, or open/describe a pull request."
+description: "Write commit messages and pull request descriptions that follow these projects' shared conventions — short lowercase conventional-style prefixes (feat:/fix:/refactor:/perf:/docs:/test:/ci:/build:/chore:/revert:, with chore(deps): for dependency updates), focused imperative subjects, and a PR body covering summary, linked issue, and local-check confirmation. Use when the user asks to commit changes, write a commit message, or write a PR title/body; the PR-creation workflow itself lives in the create-pr skill, which calls this skill for wording."
 ---
 
 # write-commit
@@ -12,8 +12,11 @@ description: "Write commit messages and pull request descriptions that follow th
 次のいずれかに該当する場合に使う:
 
 - 「コミットして」「コミットメッセージを書いて」と依頼された
-- 「PR を作って」「PR の説明を書いて」と依頼された
-- 変更をまとめて記録・共有する文面（コミット/PR）の作成を求められた
+- 「PR のタイトルを書いて」「PR の説明／本文を書いて」と依頼された
+- 変更を記録・共有する文面（コミット / PR タイトル・本文）の作成を求められた
+- `create-pr` スキルから、PR タイトル・本文の文面規約として参照されたとき
+
+> **「PR を作って」「PR を出して」など PR 作成そのものの依頼は `create-pr` が主スキル**。本スキルはその中で文面（タイトル・本文）を担当する。コミットや PR 文面だけを書く依頼なら本スキル単独で使う。
 
 ## コミットメッセージ規約
 
