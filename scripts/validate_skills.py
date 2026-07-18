@@ -106,7 +106,10 @@ def description_scalar_style(front: str) -> str | None:
 
 
 def main() -> int:
-    skill_files = sorted(SKILLS_DIR.glob("**/SKILL.md"))
+    # One skill == one direct child directory (skills/<name>/SKILL.md). A
+    # single-level glob matches that documented contract and avoids validating
+    # nested example/template SKILL.md files.
+    skill_files = sorted(SKILLS_DIR.glob("*/SKILL.md"))
     if not skill_files:
         print(f"No SKILL.md found under {SKILLS_DIR}", file=sys.stderr)
         return 1
