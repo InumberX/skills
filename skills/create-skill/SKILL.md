@@ -1,6 +1,6 @@
 ---
 name: create-skill
-description: Create a new Agent Skill following this repository's conventions — task-oriented naming, Agent Skills directory format, progressive disclosure, and placement rules (central skills repo vs each project's .claude/skills). Use whenever the user asks to add, create, draft, port, or restructure a skill, wants to turn existing docs, rules, or conversation knowledge into a skill, or asks where new AI-facing knowledge should live.
+description: "Create a new Agent Skill following this repository's conventions — task-oriented naming, Agent Skills directory format, progressive disclosure, and placement rules (central skills repo vs each project's .claude/skills). Use whenever the user asks to add, create, draft, port, or restructure a skill, wants to turn existing docs, rules, or conversation knowledge into a skill, or asks where new AI-facing knowledge should live."
 ---
 
 # create-skill

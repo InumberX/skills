@@ -34,9 +34,11 @@ skills/<skill-name>/
 ```yaml
 ---
 name: create-skill
-description: Create a new Agent Skill following ... Use whenever the user asks to ...
+description: "Create a new Agent Skill following ... Use whenever the user asks to ..."
 ---
 ```
+
+- `description` の値は**ダブルクォートで囲む**。自然文には `:` や `#` が紛れ込みやすく、引用符なしの YAML ではパースが壊れてスキルが発見されなくなる事故につながるため
 
 - `name`: ディレクトリ名と一致させる
 - `description`: **英語**で書く(本リポジトリの規約。ツール側のマッチング精度が安定し、after_works-v006 / sugidama で実運用中のスキルとも揃う)。次の 2 要素を必ず含める:
