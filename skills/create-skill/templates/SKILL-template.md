@@ -1,6 +1,6 @@
 ---
 name: <kebab-case-verb-phrase>
-description: <What this skill does, in English. Use when the user asks to <concrete request patterns>, or <other trigger contexts>.
+description: <What this skill does + when to use it, in English. Include concrete request patterns, e.g. "Use when the user asks to ...">
 ---
 
 # <skill-name>
