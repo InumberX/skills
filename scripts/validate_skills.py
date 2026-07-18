@@ -29,13 +29,18 @@ KEBAB_CASE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 
 def split_frontmatter(text: str) -> str | None:
-    """Return the raw frontmatter block, or None if it is missing/unterminated."""
-    if not text.startswith("---\n"):
+    """Return the raw frontmatter block, or None if it is missing/unterminated.
+
+    The opening and closing delimiters must be lines whose entire content is
+    exactly `---`; a line such as `----` or `---foo` is not a delimiter.
+    """
+    lines = text.splitlines(keepends=True)
+    if not lines or lines[0].rstrip("\r\n") != "---":
         return None
-    end = text.find("\n---", 4)
-    if end == -1:
-        return None
-    return text[4 : end + 1]
+    for i in range(1, len(lines)):
+        if lines[i].rstrip("\r\n") == "---":
+            return "".join(lines[1:i])
+    return None
 
 
 def check(skill_md: Path) -> list[str]:

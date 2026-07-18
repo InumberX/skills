@@ -38,7 +38,7 @@ description: "Create a new Agent Skill following ... Use whenever the user asks 
 ---
 ```
 
-- `description` の値は**ダブルクォートで囲む**。自然文には `:` や `#` が紛れ込みやすく、引用符なしの YAML ではパースが壊れてスキルが発見されなくなる事故につながるため。**この規約（frontmatter が YAML として妥当か・`name`/`description` の有無・`name` のケバブケースとディレクトリ一致・`description` のダブルクォート）は `scripts/validate_skills.py` が機械的に検査し、CI（`.github/workflows/validate-skills.yml`）で必須チェックとして走る。** ローカルでも `python3 scripts/validate_skills.py` で確認できる
+- `description` の値は**ダブルクォートで囲む**。自然文には `:` や `#` が紛れ込みやすく、引用符なしの YAML ではパースが壊れてスキルが発見されなくなる事故につながるため。**この規約（frontmatter が YAML として妥当か・`name`/`description` の有無・`name` のケバブケースとディレクトリ一致・`description` のダブルクォート）は `scripts/validate_skills.py` が機械的に検査し、`.github/workflows/validate-skills.yml` が push(main) と全 PR で自動実行する。** 実際に merge をブロックする「必須チェック」にするかはリポジトリのブランチ保護設定に依存する。ローカルでも `python3 scripts/validate_skills.py` で確認できる
 
 - `name`: ディレクトリ名と一致させる
 - `description`: **英語**で書く(本リポジトリの規約。ツール側のマッチング精度が安定し、after_works-v006 / sugidama で実運用中のスキルとも揃う)。次の 2 要素を必ず含める:

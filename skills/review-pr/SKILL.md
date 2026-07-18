@@ -32,7 +32,7 @@ description: "Review a pull request against a project's style, naming, and struc
 
 優先順位:
 
-1. ユーザーが PR 番号や URL を指定 → `gh pr view <番号>` / `gh pr diff <番号>` で取得（GitHub MCP が利用可能なら `mcp__github__pull_request_read` でもよい）
+1. ユーザーが PR 番号や URL を指定 → `gh pr view <番号>` / `gh pr diff <番号>` で取得（環境で提供される GitHub MCP の PR 取得ツールが使えるならそれでもよい。ツール名は MCP 実装により異なる）
 2. ブランチがデフォルトブランチ（`develop` / `main` 等）から派生している → `git diff <base>...HEAD --stat` と `git diff <base>...HEAD` で差分把握
 3. 作業ツリーに未コミット変更がある → `git status` と `git diff`
 
