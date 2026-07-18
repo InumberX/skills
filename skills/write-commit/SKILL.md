@@ -1,6 +1,6 @@
 ---
 name: write-commit
-description: Write commit messages and pull request descriptions that follow these projects' shared conventions — short lowercase conventional-style prefixes (fix:/add:/feat:/refactor:/perf:/chore:/style:), focused imperative subjects, and a PR body covering summary, linked issue, and local-check confirmation. Use when the user asks to commit changes, write a commit message, or open/describe a pull request.
+description: Write commit messages and pull request descriptions that follow these projects' shared conventions — short lowercase conventional-style prefixes (feat:/fix:/refactor:/perf:/chore:/style:), focused imperative subjects, and a PR body covering summary, linked issue, and local-check confirmation. Use when the user asks to commit changes, write a commit message, or open/describe a pull request.
 ---
 
 # write-commit
@@ -35,12 +35,13 @@ description: Write commit messages and pull request descriptions that follow the
 | プレフィックス | 用途 | 例 |
 |---|---|---|
 | `fix:` | バグ修正・既存挙動やスタイルの修正 | `fix: header mobile button` |
-| `add:` | 小〜中規模の追加（**このプロジェクト群の独自イディオム**。標準の `feat:` より軽い追加に使う） | `add: home latest works` |
-| `feat:` | まとまった機能追加・基盤変更 | `feat: PrimitiveButton ベースコンポーネントを追加` |
+| `feat:` | **機能・要素の追加はすべてこれに統一**（規模の大小を問わない） | `feat: PrimitiveButton ベースコンポーネントを追加` / `feat: home latest works` |
 | `refactor:` | 挙動を変えないリファクタ | `refactor: type のみで使用する import に type 修飾子を付与` |
 | `perf:` | パフォーマンス改善 | `perf: 静的アセットに immutable な Cache-Control を付与` |
 | `chore:` | 雑務・作業ドキュメント整理など | `chore: remove migration working docs` |
 | `style:` | フォーマット・型修飾子など挙動非依存の整形 | `style: add type modifiers to type-only imports` |
+
+> **`add:` は使わない（旧慣習）。** 過去の履歴には `add:` が多数あるが、Conventional Commits 標準外で `feat:` との境界も曖昧なため、新規コミットでは追加は必ず `feat:` に寄せる。過去コミットの書き換えは不要。既存の `add:` を見ても真似しない。
 
 ### プレフィックスなしの慣例
 
