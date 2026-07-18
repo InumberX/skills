@@ -1,6 +1,6 @@
 ---
 name: create-pr
-description: Open a pull request following these projects' conventions — determine the base branch, assemble the diff, write a prefix-style title and a body that fills the repo's PR template (or the standard checklist when none exists), then create it via the GitHub MCP tools. Use when the user asks to create, open, or raise a pull request. Message/body wording conventions come from the write-commit skill.
+description: "Open a pull request following these projects' conventions — determine the base branch, assemble the diff, write a prefix-style title and a body that fills the repo's PR template (or the standard checklist when none exists), then create it via the GitHub MCP tools. Use when the user asks to create, open, or raise a pull request. Message/body wording conventions come from the write-commit skill."
 ---
 
 # create-pr

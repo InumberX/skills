@@ -1,6 +1,6 @@
 ---
 name: review-pr
-description: Review a pull request against a project's style, naming, and structural conventions. Use when the user asks for a PR review, code review, or review of pending changes — including narrowed-scope requests like "review the styling" or "check the naming". Provides the cross-project review procedure and output format; the concrete rules live in each project's own .claude/skills/review-pr/rules/.
+description: "Review a pull request against a project's style, naming, and structural conventions. Use when the user asks for a PR review, code review, or review of pending changes — including narrowed-scope requests like 'review the styling' or 'check the naming'. Provides the cross-project review procedure and output format; the concrete rules live in each project's own .claude/skills/review-pr/rules/."
 ---
 
 # review-pr
