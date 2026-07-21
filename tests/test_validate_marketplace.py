@@ -96,6 +96,34 @@ class TestCheck(unittest.TestCase):
         self._write_catalog(_catalog(["create-pr"]))
         self.assertEqual(validate_marketplace.check(), [])
 
+    def test_bundle_source_must_be_canonical(self):
+        # "./skills/.." resolves to the repo root but is a non-canonical bundle
+        # spelling; only "./" is accepted.
+        self._make_skill("create-pr")
+        cat = _catalog(["create-pr"])
+        cat["plugins"][0]["source"] = "./skills/.."
+        self._write_catalog(cat)
+        errs = validate_marketplace.check()
+        self.assertTrue(any("bundle source must be exactly './'" in e for e in errs))
+
+    def test_bundle_name_must_match_marketplace_name(self):
+        self._make_skill("create-pr")
+        cat = _catalog(["create-pr"])
+        cat["plugins"][0]["name"] = "not-the-catalog-name"
+        self._write_catalog(cat)
+        errs = validate_marketplace.check()
+        self.assertTrue(any("must match the marketplace name" in e for e in errs))
+
+    def test_second_bundle_entry_is_rejected(self):
+        # A second bundle entry must carry the same required name, so it fails
+        # the duplicate-name check rather than silently passing.
+        self._make_skill("create-pr")
+        cat = _catalog(["create-pr"])
+        cat["plugins"].append(_bundle_entry())
+        self._write_catalog(cat)
+        errs = validate_marketplace.check()
+        self.assertTrue(any("duplicate" in e for e in errs))
+
     def test_bundle_with_no_skills_is_flagged(self):
         self._write_catalog({"name": "inumberx-skills", "owner": {"name": "X"}, "plugins": [_bundle_entry()]})
         errs = validate_marketplace.check()

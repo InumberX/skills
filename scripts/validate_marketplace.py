@@ -22,9 +22,11 @@ Checks:
   3. Each plugin entry has a kebab-case `name` and a relative-path `source`
      (starting with "./") that resolves inside the repository — a source that
      escapes via "./../…" or a symlink is rejected.
-  4. The bundle entry (source resolves to the repo root) requires skills/ to
+  4. The bundle entry (source resolves to the repo root) must use the canonical
+     source "./" and be named after the marketplace, and requires skills/ to
      hold at least one skill; it is exempt from the name==directory and the
-     per-skill sync checks.
+     per-skill sync checks. Naming it after the marketplace pins it to a single
+     entry (a second bundle collides on the duplicate-name check).
   5. Each per-skill entry's source is exactly ./skills/<name>/ (a direct child
      of skills/) holding a SKILL.md, and its `name` matches that directory (so
      the plugin namespace matches the skill directory). A source pointing
@@ -121,7 +123,17 @@ def check() -> list[str]:
 
         if resolved == repo_root:
             # Bundle plugin: ships all of skills/. Exempt from name==dir and the
-            # per-skill sync, but skills/ must actually contain something.
+            # per-skill sync, but held to a canonical contract: source is exactly
+            # "./" (not a non-canonical spelling like "./." or "./skills/.."),
+            # and name equals the marketplace name. Requiring the name pins the
+            # bundle to a single entry — a second bundle then collides on the
+            # duplicate-name check instead of silently passing.
+            if source != "./":
+                errors.append(f"{where} ({pname or source}): bundle source must be exactly './'")
+            if pname and isinstance(name, str) and pname != name:
+                errors.append(
+                    f"{where}: bundle `name` ({pname!r}) must match the marketplace name ({name!r})"
+                )
             if not skill_dir_names():
                 errors.append(f"{where} ({pname or source}): bundle source has no skills under skills/")
             continue
