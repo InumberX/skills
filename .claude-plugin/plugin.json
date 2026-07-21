@@ -1,0 +1,7 @@
+{
+  "name": "inumberx-skills",
+  "description": "AI コーディングエージェント向けのプロジェクト横断スキルを一括で提供する全部入りプラグイン(create-pr / create-skill / review-pr / write-commit)。skills/ 配下のスキルをすべて含む。",
+  "author": {
+    "name": "InumberX"
+  }
+}

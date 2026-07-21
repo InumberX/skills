@@ -3,21 +3,31 @@
 
 The marketplace catalog lets Claude Code users install these skills as plugins
 (`/plugin marketplace add InumberX/skills` then `/plugin install <name>@inumberx-skills`).
-Because every skill is published as its own single-skill plugin, the catalog and
-the skills/ directories must stay in sync — a skill added without a matching
-entry is silently unpublished, and an entry pointing at a deleted skill breaks
-install. This script fails CI when they drift.
+The catalog publishes two kinds of plugin:
+
+  * a single **bundle** plugin whose source is the repo root ("./"), which ships
+    every skill under skills/ at once; and
+  * one **per-skill** plugin per skills/<name>/ directory, so users can install
+    just the skills they want.
+
+Because both are derived from skills/, the catalog must stay in sync with the
+directory tree — a skill added without a matching per-skill entry is silently
+unpublished, and an entry pointing at a deleted skill breaks install. This
+script fails CI when they drift.
 
 Checks:
   1. marketplace.json exists, is valid JSON, and has the required top-level
      fields (`name`, `owner`, `plugins`).
   2. `name` is kebab-case; `owner` has a non-empty `name`.
-  3. Each plugin entry has a kebab-case `name` and a `source`.
-  4. With `metadata.pluginRoot: "./skills"`, every entry's source resolves to an
-     existing skills/<source>/SKILL.md.
-  5. Entry `name` matches its source directory (so the plugin namespace matches
-     the skill directory).
-  6. The set of published plugins exactly matches the set of skills/*/SKILL.md
+  3. Each plugin entry has a kebab-case `name` and a relative-path `source`
+     (starting with "./").
+  4. The bundle entry (source resolves to the repo root) requires skills/ to
+     hold at least one skill; it is exempt from the name==directory and the
+     per-skill sync checks.
+  5. Each per-skill entry's source resolves to an existing skills/<name>/SKILL.md,
+     and its `name` matches that directory (so the plugin namespace matches the
+     skill directory).
+  6. The set of per-skill entries exactly matches the set of skills/*/SKILL.md
      directories — no missing entries, no stale entries, no duplicates.
 
 Exit code is non-zero if any check fails.
@@ -63,17 +73,15 @@ def check() -> list[str]:
     if not isinstance(owner, dict) or not isinstance(owner.get("name"), str) or not owner["name"].strip():
         errors.append("`owner.name` is missing or empty")
 
-    plugin_root = ""
-    metadata = data.get("metadata")
-    if isinstance(metadata, dict):
-        plugin_root = metadata.get("pluginRoot", "") or ""
-
     plugins = data.get("plugins")
     if not isinstance(plugins, list) or not plugins:
         errors.append("`plugins` is missing or empty")
         return errors
 
-    listed: list[str] = []
+    repo_root = REPO_ROOT.resolve()
+    per_skill: list[str] = []  # names of per-skill entries, for the sync check
+    all_names: list[str] = []  # every entry name, for duplicate detection
+
     for i, entry in enumerate(plugins):
         where = f"plugins[{i}]"
         if not isinstance(entry, dict):
@@ -84,51 +92,70 @@ def check() -> list[str]:
         if not isinstance(pname, str) or not KEBAB_CASE.match(pname or ""):
             errors.append(f"{where}: `name` is missing or not kebab-case")
             pname = None
+        else:
+            all_names.append(pname)
 
         source = entry.get("source")
         if not isinstance(source, str) or not source.strip():
             # Only relative-path sources are used in this repo; object sources
-            # (github/url/npm) would point outside the skills/ tree.
+            # (github/url/npm) would point outside this repository.
             errors.append(f"{where} ({pname or '?'}): `source` must be a non-empty relative path")
             continue
+        if not source.startswith("./"):
+            errors.append(f"{where} ({pname or source}): `source` must start with './'")
 
-        # With pluginRoot "./skills", a bare source "foo" resolves to skills/foo.
-        rel_root = plugin_root.lstrip("./")
-        resolved = (REPO_ROOT / rel_root / source) if rel_root else (REPO_ROOT / source)
+        resolved = (REPO_ROOT / source).resolve()
+
+        if resolved == repo_root:
+            # Bundle plugin: ships all of skills/. Exempt from name==dir and the
+            # per-skill sync, but skills/ must actually contain something.
+            if not skill_dir_names():
+                errors.append(f"{where} ({pname or source}): bundle source has no skills under skills/")
+            continue
+
+        # Per-skill plugin: source must be skills/<name>/ with a SKILL.md.
         skill_md = resolved / "SKILL.md"
         if not skill_md.is_file():
             errors.append(
-                f"{where} ({pname or source}): source resolves to {resolved.relative_to(REPO_ROOT)}, "
-                "which has no SKILL.md"
+                f"{where} ({pname or source}): source resolves to "
+                f"{_rel(resolved)}, which has no SKILL.md"
             )
-
-        if pname and pname != source:
+        if pname and pname != resolved.name:
             errors.append(
-                f"{where}: `name` ({pname!r}) must match its source directory ({source!r})"
+                f"{where}: `name` ({pname!r}) must match its source directory ({resolved.name!r})"
             )
-
         if pname:
-            listed.append(pname)
+            per_skill.append(pname)
 
-    # Sync: published set must equal the skills/ set, with no duplicates.
-    dupes = sorted({n for n in listed if listed.count(n) > 1})
+    # Duplicate detection across every entry (bundle included).
+    dupes = sorted({n for n in all_names if all_names.count(n) > 1})
     if dupes:
         errors.append(f"duplicate plugin entries: {', '.join(dupes)}")
 
-    published = set(listed)
+    # Sync: the per-skill entries must exactly cover the skills/ directories.
+    published = set(per_skill)
     on_disk = skill_dir_names()
     missing = sorted(on_disk - published)
     stale = sorted(published - on_disk)
     if missing:
         errors.append(
-            "skills without a marketplace entry (add them to plugins): " + ", ".join(missing)
+            "skills without a per-skill marketplace entry (add them to plugins): "
+            + ", ".join(missing)
         )
     if stale:
         errors.append(
-            "marketplace entries with no matching skill (remove or fix): " + ", ".join(stale)
+            "per-skill entries with no matching skill (remove or fix): " + ", ".join(stale)
         )
 
     return errors
+
+
+def _rel(path: Path) -> str:
+    """Render `path` relative to the repo root when possible, else absolute."""
+    try:
+        return str(path.relative_to(REPO_ROOT.resolve()))
+    except ValueError:
+        return str(path)
 
 
 def main() -> int:

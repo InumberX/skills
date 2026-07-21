@@ -29,22 +29,36 @@ skills/
 
 ### 1. プラグインマーケットプレイス(推奨)
 
-本リポジトリは Claude Code の**プラグインマーケットプレイス**として公開している(`.claude-plugin/marketplace.json`)。各スキルは単一スキルプラグインとして個別に配布され、使いたいものだけ選んで入れられる。
+本リポジトリは Claude Code の**プラグインマーケットプレイス**として公開している(`.claude-plugin/marketplace.json`)。**一括**でも**個別**でも導入できる。
 
 ```bash
-# マーケットプレイスを登録(初回のみ)
+# マーケットプレイスを登録(初回のみ。登録だけではインストールされない)
 /plugin marketplace add InumberX/skills
+```
 
-# 使いたいスキルだけインストール(例)
+**一括インストール** — 全スキルをまとめて入れる:
+
+```bash
+/plugin install inumberx-skills@inumberx-skills
+```
+
+**個別インストール** — 使いたいスキルだけ入れる:
+
+```bash
 /plugin install review-pr@inumberx-skills
 /plugin install write-commit@inumberx-skills
+```
 
-# 更新を取り込む
+更新を取り込む:
+
+```bash
 /plugin marketplace update inumberx-skills
 ```
 
-インストールしたスキルは自動発見・自動発動され、スラッシュ形式では `/review-pr` のように呼び出せる。配布しているプラグインは `create-pr` / `create-skill` / `review-pr` / `write-commit` の 4 つ。
+インストールしたスキルは自動発見・自動発動され、スラッシュ形式では `/review-pr` のように呼び出せる。配布しているプラグインは、全部入りの `inumberx-skills` と、個別の `create-pr` / `create-skill` / `review-pr` / `write-commit`。
 
+> **一括と個別はどちらか一方を選ぶ。** 両方入れると同じスキルが二重にロードされる(名前空間が別々なので壊れはしないが冗長)。
+>
 > バージョンを固定していないため、`marketplace.json` 更新時点の最新スキルが配布される。特定版に固定したい場合は各エントリに `version` を付ける。
 
 ### 2. 手動コピー

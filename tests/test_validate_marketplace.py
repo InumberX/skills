@@ -24,16 +24,23 @@ validate_marketplace = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(validate_marketplace)
 
 
-def _entry(name: str) -> dict:
-    return {"name": name, "source": name, "description": f"{name} plugin"}
+def _bundle_entry(name: str = "inumberx-skills") -> dict:
+    return {"name": name, "source": "./", "description": f"{name} bundle"}
 
 
-def _catalog(plugin_names: list[str]) -> dict:
+def _skill_entry(name: str) -> dict:
+    return {"name": name, "source": f"./skills/{name}", "description": f"{name} plugin"}
+
+
+def _catalog(skill_names: list[str], *, bundle: bool = True) -> dict:
+    plugins = []
+    if bundle:
+        plugins.append(_bundle_entry())
+    plugins.extend(_skill_entry(n) for n in skill_names)
     return {
         "name": "inumberx-skills",
         "owner": {"name": "InumberX"},
-        "metadata": {"pluginRoot": "./skills"},
-        "plugins": [_entry(n) for n in plugin_names],
+        "plugins": plugins,
     }
 
 
@@ -70,11 +77,37 @@ class TestCheck(unittest.TestCase):
         text = obj if isinstance(obj, str) else json.dumps(obj)
         validate_marketplace.MARKETPLACE.write_text(text, encoding="utf-8")
 
-    def test_in_sync_passes(self):
+    def test_in_sync_with_bundle_passes(self):
         for n in ("create-pr", "review-pr"):
             self._make_skill(n)
         self._write_catalog(_catalog(["create-pr", "review-pr"]))
         self.assertEqual(validate_marketplace.check(), [])
+
+    def test_in_sync_without_bundle_passes(self):
+        # The bundle is optional; per-skill-only catalogs are still valid.
+        self._make_skill("create-pr")
+        self._write_catalog(_catalog(["create-pr"], bundle=False))
+        self.assertEqual(validate_marketplace.check(), [])
+
+    def test_bundle_does_not_count_as_a_skill(self):
+        # A bundle entry alongside its skills must not be flagged as stale, and
+        # must not satisfy the sync check on its own.
+        self._make_skill("create-pr")
+        self._write_catalog(_catalog(["create-pr"]))
+        self.assertEqual(validate_marketplace.check(), [])
+
+    def test_bundle_with_no_skills_is_flagged(self):
+        self._write_catalog({"name": "inumberx-skills", "owner": {"name": "X"}, "plugins": [_bundle_entry()]})
+        errs = validate_marketplace.check()
+        self.assertTrue(any("bundle source has no skills" in e for e in errs))
+
+    def test_source_must_start_with_dot_slash(self):
+        self._make_skill("create-pr")
+        cat = _catalog(["create-pr"], bundle=False)
+        cat["plugins"][0]["source"] = "skills/create-pr"  # missing ./
+        self._write_catalog(cat)
+        errs = validate_marketplace.check()
+        self.assertTrue(any("must start with './'" in e for e in errs))
 
     def test_missing_file(self):
         errs = validate_marketplace.check()
@@ -90,7 +123,7 @@ class TestCheck(unittest.TestCase):
         self._make_skill("review-pr")
         self._write_catalog(_catalog(["create-pr"]))  # review-pr unpublished
         errs = validate_marketplace.check()
-        self.assertTrue(any("without a marketplace entry" in e and "review-pr" in e for e in errs))
+        self.assertTrue(any("without a per-skill marketplace entry" in e and "review-pr" in e for e in errs))
 
     def test_stale_entry_is_flagged(self):
         self._make_skill("create-pr")
@@ -101,9 +134,9 @@ class TestCheck(unittest.TestCase):
 
     def test_name_source_mismatch(self):
         self._make_skill("create-pr")
-        cat = _catalog([])
-        cat["plugins"] = [{"name": "create-pr", "source": "other", "description": "x"}]
         self._make_skill("other")
+        cat = _catalog([], bundle=False)
+        cat["plugins"] = [{"name": "create-pr", "source": "./skills/other", "description": "x"}]
         self._write_catalog(cat)
         errs = validate_marketplace.check()
         self.assertTrue(any("must match its source directory" in e for e in errs))
@@ -127,7 +160,7 @@ class TestCheck(unittest.TestCase):
     def test_duplicate_entries(self):
         self._make_skill("create-pr")
         cat = _catalog(["create-pr"])
-        cat["plugins"].append(_entry("create-pr"))
+        cat["plugins"].append(_skill_entry("create-pr"))
         self._write_catalog(cat)
         errs = validate_marketplace.check()
         self.assertTrue(any("duplicate" in e for e in errs))
