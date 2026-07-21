@@ -1,0 +1,52 @@
+{
+  "name": "inumberx-skills",
+  "owner": {
+    "name": "InumberX"
+  },
+  "description": "AI コーディングエージェント向けのプロジェクト横断スキル集(Agent Skills 標準形式)。",
+  "metadata": {
+    "pluginRoot": "./skills"
+  },
+  "plugins": [
+    {
+      "name": "create-pr",
+      "source": "create-pr",
+      "description": "PR 作成の作業フロー(ベース判定 → 差分集約 → テンプレ検出 → 作成)。タイトル・本文の文面規約は write-commit に委譲する。",
+      "author": {
+        "name": "InumberX"
+      },
+      "category": "development",
+      "tags": ["git", "pull-request", "github", "workflow"]
+    },
+    {
+      "name": "create-skill",
+      "source": "create-skill",
+      "description": "Agent Skills 標準形式で新しいスキルを作成する手順・命名/配置ルール・段階的読み込みのガイド。",
+      "author": {
+        "name": "InumberX"
+      },
+      "category": "development",
+      "tags": ["skills", "authoring", "meta", "conventions"]
+    },
+    {
+      "name": "review-pr",
+      "source": "review-pr",
+      "description": "プロジェクト横断のコードレビュー手順と出力フォーマットの骨格。具体的な観点は各リポジトリの .claude/skills 側に置く。",
+      "author": {
+        "name": "InumberX"
+      },
+      "category": "development",
+      "tags": ["review", "code-review", "pull-request", "quality"]
+    },
+    {
+      "name": "write-commit",
+      "source": "write-commit",
+      "description": "コミットメッセージと PR 本文の共通規約(プレフィックス語彙・件名の粒度・本文の骨組み)。",
+      "author": {
+        "name": "InumberX"
+      },
+      "category": "development",
+      "tags": ["git", "commit", "conventions", "pull-request"]
+    }
+  ]
+}

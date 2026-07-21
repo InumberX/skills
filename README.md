@@ -25,6 +25,32 @@ skills/
 
 新しいスキルは [`skills/create-skill/`](./skills/create-skill/) の手順に従って作成する。
 
-## 取り込み方法(当面)
+## 取り込み方法
 
-使いたいスキルを各プロジェクトの `.claude/skills/` へ手動コピーする。取り込み先で改善したら本リポジトリに還元する。外部公開(GitHub Pages 等)・同期の自動化は必要になってから導入する。
+### 1. プラグインマーケットプレイス(推奨)
+
+本リポジトリは Claude Code の**プラグインマーケットプレイス**として公開している(`.claude-plugin/marketplace.json`)。各スキルは単一スキルプラグインとして個別に配布され、使いたいものだけ選んで入れられる。
+
+```bash
+# マーケットプレイスを登録(初回のみ)
+/plugin marketplace add InumberX/skills
+
+# 使いたいスキルだけインストール(例)
+/plugin install review-pr@inumberx-skills
+/plugin install write-commit@inumberx-skills
+
+# 更新を取り込む
+/plugin marketplace update inumberx-skills
+```
+
+インストールしたスキルは自動発見・自動発動され、スラッシュ形式では `/review-pr` のように呼び出せる。配布しているプラグインは `create-pr` / `create-skill` / `review-pr` / `write-commit` の 4 つ。
+
+> バージョンを固定していないため、`marketplace.json` 更新時点の最新スキルが配布される。特定版に固定したい場合は各エントリに `version` を付ける。
+
+### 2. 手動コピー
+
+マーケットプレイスを使わない場合は、使いたいスキルを各プロジェクトの `.claude/skills/` へ手動コピーする。取り込み先で改善したら本リポジトリに還元する。
+
+### 公開物の検査
+
+`scripts/validate_marketplace.py` が `marketplace.json` の妥当性と `skills/` ディレクトリとの同期(登録漏れ・削除済みエントリの残存)を機械的に検査する。`.github/workflows/validate-skills.yml` が push(main) と全 PR で自動実行するため、スキルを追加・削除したら `marketplace.json` のエントリも合わせて更新する(ローカルでは `python3 scripts/validate_marketplace.py`)。
