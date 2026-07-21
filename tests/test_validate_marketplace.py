@@ -109,6 +109,30 @@ class TestCheck(unittest.TestCase):
         errs = validate_marketplace.check()
         self.assertTrue(any("must start with './'" in e for e in errs))
 
+    def test_source_escaping_repo_is_flagged(self):
+        # "./../…" resolves outside the repo root and must be rejected before the
+        # SKILL.md / name checks can be fooled by files outside this repository.
+        self._make_skill("create-pr")
+        cat = _catalog(["create-pr"], bundle=False)
+        cat["plugins"][0]["source"] = "./../evil"
+        self._write_catalog(cat)
+        errs = validate_marketplace.check()
+        self.assertTrue(any("resolves outside the repository" in e for e in errs))
+
+    def test_per_skill_source_outside_skills_dir_is_flagged(self):
+        # A source inside the repo but not under skills/<name> must be rejected
+        # even when a SKILL.md sits there, so it can't ship the wrong contents.
+        (self.root / "create-pr").mkdir()
+        (self.root / "create-pr" / "SKILL.md").write_text(
+            '---\nname: create-pr\ndescription: "x"\n---\n', encoding="utf-8"
+        )
+        self._make_skill("create-pr")  # the real one under skills/
+        cat = _catalog([], bundle=False)
+        cat["plugins"] = [{"name": "create-pr", "source": "./create-pr", "description": "x"}]
+        self._write_catalog(cat)
+        errs = validate_marketplace.check()
+        self.assertTrue(any("must be './skills/<name>'" in e for e in errs))
+
     def test_missing_file(self):
         errs = validate_marketplace.check()
         self.assertTrue(any("missing" in e for e in errs))

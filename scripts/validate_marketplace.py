@@ -20,13 +20,15 @@ Checks:
      fields (`name`, `owner`, `plugins`).
   2. `name` is kebab-case; `owner` has a non-empty `name`.
   3. Each plugin entry has a kebab-case `name` and a relative-path `source`
-     (starting with "./").
+     (starting with "./") that resolves inside the repository — a source that
+     escapes via "./../…" or a symlink is rejected.
   4. The bundle entry (source resolves to the repo root) requires skills/ to
      hold at least one skill; it is exempt from the name==directory and the
      per-skill sync checks.
-  5. Each per-skill entry's source resolves to an existing skills/<name>/SKILL.md,
-     and its `name` matches that directory (so the plugin namespace matches the
-     skill directory).
+  5. Each per-skill entry's source is exactly ./skills/<name>/ (a direct child
+     of skills/) holding a SKILL.md, and its `name` matches that directory (so
+     the plugin namespace matches the skill directory). A source pointing
+     elsewhere in the repo is rejected even if it happens to contain a SKILL.md.
   6. The set of per-skill entries exactly matches the set of skills/*/SKILL.md
      directories — no missing entries, no stale entries, no duplicates.
 
@@ -79,6 +81,7 @@ def check() -> list[str]:
         return errors
 
     repo_root = REPO_ROOT.resolve()
+    skills_dir = SKILLS_DIR.resolve()
     per_skill: list[str] = []  # names of per-skill entries, for the sync check
     all_names: list[str] = []  # every entry name, for duplicate detection
 
@@ -103,8 +106,18 @@ def check() -> list[str]:
             continue
         if not source.startswith("./"):
             errors.append(f"{where} ({pname or source}): `source` must start with './'")
+            continue
 
         resolved = (REPO_ROOT / source).resolve()
+
+        # Reject sources that escape the repository via "./../…" or a symlink
+        # resolving outside the repo root — such an entry could ship files from
+        # outside this repository while still passing the other checks.
+        if resolved != repo_root and repo_root not in resolved.parents:
+            errors.append(
+                f"{where} ({pname or source}): source {source!r} resolves outside the repository"
+            )
+            continue
 
         if resolved == repo_root:
             # Bundle plugin: ships all of skills/. Exempt from name==dir and the
@@ -113,7 +126,17 @@ def check() -> list[str]:
                 errors.append(f"{where} ({pname or source}): bundle source has no skills under skills/")
             continue
 
-        # Per-skill plugin: source must be skills/<name>/ with a SKILL.md.
+        # Per-skill plugin: source must be exactly ./skills/<name>/ (a direct
+        # child of skills/) holding a SKILL.md. A path elsewhere in the repo, or
+        # a nested subdirectory, would ship the wrong contents while still
+        # satisfying the skills/ sync check.
+        if resolved.parent != skills_dir:
+            errors.append(
+                f"{where} ({pname or source}): per-skill source must be './skills/<name>', "
+                f"got {source!r}"
+            )
+            continue
+
         skill_md = resolved / "SKILL.md"
         if not skill_md.is_file():
             errors.append(
