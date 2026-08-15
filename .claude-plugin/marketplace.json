@@ -38,12 +38,12 @@
     {
       "name": "review-pr",
       "source": "./skills/review-pr",
-      "description": "プロジェクト横断のコードレビュー手順と出力フォーマットの骨格。具体的な観点は各リポジトリの .claude/skills 側に置く。",
+      "description": "プロジェクト横断のコードレビュー手順と出力フォーマットの骨格。スタイル・命名などの観点は各リポジトリの .claude/skills 側に置き、フレームワーク/プラットフォーム由来のセキュリティ観点 (rules/security/) のみ同梱する。",
       "author": {
         "name": "InumberX"
       },
       "category": "development",
-      "tags": ["review", "code-review", "pull-request", "quality"]
+      "tags": ["review", "code-review", "pull-request", "quality", "security"]
     },
     {
       "name": "write-commit",
