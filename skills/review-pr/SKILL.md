@@ -61,6 +61,8 @@ description: "Review a pull request against a project's style, naming, and struc
 |---|---|
 | 常に | `rules/security/boundary.md` |
 | `wrangler.jsonc` / `wrangler.toml` がある | `rules/security/cloudflare-workers.md` |
+| `next.config.*` がある | `rules/security/nextjs.md` |
+| `react-router.config.*` がある | `rules/security/react-router.md` |
 
 ### 3. ルールの読み込みとレビュー
 
