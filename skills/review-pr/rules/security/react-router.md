@@ -31,16 +31,23 @@ v8 では middleware が既定で有効（v7 では `future.v8_middleware`）。
 
 ## 4. `redirect()` のリダイレクト先を利用者入力から組み立てない
 
-クエリパラメータやフォーム値をそのまま `redirect()` に渡すと、外部サイトへ誘導するオープンリダイレクトになる。遷移先は許可リストか、自サイト内の相対パスに限定する。
+クエリパラメータやフォーム値をそのまま `redirect()` に渡すと、外部サイトへ誘導するオープンリダイレクトになる。**遷移先を文字列として検査せず、同一オリジンに解決できるかで判定する。**
 
 ```ts
 // Bad: 任意の絶対 URL へ飛ばせる
 return redirect(new URL(request.url).searchParams.get('redirectTo') ?? '/')
 
-// Good: 相対パスのみ許可する
+// Bad: 文字列の前方一致による検査。`/\evil.com` を通してしまう
 const to = new URL(request.url).searchParams.get('redirectTo') ?? '/'
 return redirect(to.startsWith('/') && !to.startsWith('//') ? to : '/')
+
+// Good: 自サイトのオリジンに解決できるものだけ許可する
+const url = new URL(request.url)
+const to = new URL(url.searchParams.get('redirectTo') ?? '/', url.origin)
+return redirect(to.origin === url.origin ? to.pathname + to.search : '/')
 ```
+
+前方一致の検査が不足するのは、**URL パーサとブラウザが `\` を `/` と同一視する**ため。`/\evil.com` はスラッシュ1つで始まるので `startsWith('//')` の除外をすり抜けるが、解決すると `https://evil.com` になる。`\\evil.com` や `////evil.com` も同様。オリジンで比較すればこれらはまとめて弾ける（`javascript:` スキームもオリジンが一致しないため落ちる）。
 
 `action` を追加したときは、POST を受ける以上 Origin 検証や CSRF トークンの経路に載っているかも確認する。
 
