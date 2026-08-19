@@ -1,6 +1,6 @@
 # セキュリティ観点: Cloudflare Workers
 
-対象: Wrangler の設定ファイル（`wrangler.jsonc` / `wrangler.toml`）と Worker のエントリポイント
+対象: Wrangler の設定ファイル（`wrangler.jsonc` / `wrangler.json` / `wrangler.toml`）と Worker のエントリポイント
 
 Worker で認証・認可のゲートを実装している場合、**ゲートのコードを一切変えなくても、設定1行の変更でゲートが無効化される**。設定ファイルが差分に含まれていたら必ず確認する。
 
