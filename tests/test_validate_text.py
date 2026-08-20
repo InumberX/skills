@@ -57,11 +57,23 @@ class CheckTest(unittest.TestCase):
     def test_ignores_ascii_only_pair(self):
         self.assertClean("`git push(main)` と全 PR で自動実行する\n")
 
-    def test_ignores_code_sample(self):
+    def test_code_sample_without_japanese_is_clean(self):
+        # 実際のコード例は日本語を含まないため、フェンスの中でも指摘されない。
         self.assertClean("```ts\nreturn redirect(to.pathname + to.search)\n```\n")
 
     def test_ignores_empty_pair(self):
         self.assertClean("空の括弧 () は対象外\n")
+
+    # --- fenced code blocks are checked, not skipped ---
+
+    def test_flags_japanese_inside_a_fenced_block(self):
+        # README のディレクトリツリーのように、フェンスの中の注釈も本文と同じ扱い。
+        errors = self.check("```text\n└── skills/   # 1 スキル = 1 ディレクトリ(タスク単位)\n```\n")
+        self.assertEqual(len(errors), 1)
+        self.assertIn("line 2", errors[0])
+
+    def test_flags_japanese_inside_an_inline_code_span(self):
+        self.assertEqual(len(self.check("`値(デフォルト)` を書く\n")), 1)
 
     # --- Japanese detection covers the marks used in this repository ---
 

@@ -85,6 +85,6 @@ CI（`.github/workflows/validate-skills.yml`）で自動実行する。ローカ
 | 日本語の文章 | `npm run lint-text` | 箇条書きの句点統一など（textlint） |
 | Python | `ruff check` / `ruff format --check` | lint と整形 |
 
-`lint-markdown` と `lint-text` には `-fix` 版がある。**括弧の検査を textlint ではなく専用スクリプトで行っているのは意図的**で、textlint の `4.3.1.丸かっこ（）` は見出し・テーブル・引用を検査対象から外すうえ、自動修正が開き括弧だけを全角へ変えて閉じ括弧を半角のまま残すことがあるため。理由は `.textlintrc.json` を変更する前に `git log` で確認すること。
+`lint-markdown` と `lint-text` には `-fix` 版がある。**括弧の検査を textlint ではなく専用スクリプトで行っているのは意図的**で、textlint の `4.3.1.丸かっこ（）` は見出し・テーブル・引用を検査対象から外すうえ、自動修正が開き括弧だけを全角へ変えて閉じ括弧を半角のまま残すことがあるため。無効化したルールの判断根拠は `.textlintrc.json` のコミット履歴に残してあるので、設定を変更する場合はまず `git log` で経緯を確認すること。
 
 Node の依存は文章検査のためだけにあり、スキル本体は Markdown のみで動く。npm パッケージは `.npmrc` の `min-release-age=1` により、公開から1日経過したもののみを取得する（この設定が実際に効くのは npm 11.6 以降。CI は Node 24 を使う）。

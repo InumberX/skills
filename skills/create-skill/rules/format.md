@@ -49,3 +49,11 @@ description: "Create a new Agent Skill following ... Use whenever the user asks 
 ## 本文の言語
 
 本文は日本語で書く（本リポジトリの規約。実運用中のプロジェクトスキルと揃える）。コード例・コマンド・ファイルパスは実際のものをそのまま使う。
+
+### 括弧
+
+**日本語を囲む括弧は全角の（）を使う。** 半角と全角が混ざると、同じ役割の記述が場所によって違って見え、差分でも本質的でない変更が目立つ。見出し・テーブルのセル・引用ブロック・コードブロック内のコメントも同じ扱いにする。
+
+日本語を含まない括弧はそのままでよい（`push(main)`、`redirect(to)` など）。実際のコード例を書き換える必要は無い。
+
+`scripts/validate_text.py` がこの規約と、開き括弧と閉じ括弧の全角/半角が揃っているかを機械的に検査する（`.github/workflows/validate-skills.yml` が push(main) と全 PR で自動実行する。ローカルでは `python3 scripts/validate_text.py`）。
