@@ -74,7 +74,11 @@ def check() -> list[str]:
         errors.append("`name` is missing or not kebab-case")
 
     owner = data.get("owner")
-    if not isinstance(owner, dict) or not isinstance(owner.get("name"), str) or not owner["name"].strip():
+    if (
+        not isinstance(owner, dict)
+        or not isinstance(owner.get("name"), str)
+        or not owner["name"].strip()
+    ):
         errors.append("`owner.name` is missing or empty")
 
     plugins = data.get("plugins")
@@ -135,7 +139,9 @@ def check() -> list[str]:
                     f"{where}: bundle `name` ({pname!r}) must match the marketplace name ({name!r})"
                 )
             if not skill_dir_names():
-                errors.append(f"{where} ({pname or source}): bundle source has no skills under skills/")
+                errors.append(
+                    f"{where} ({pname or source}): bundle source has no skills under skills/"
+                )
             continue
 
         # Per-skill plugin: source must be exactly ./skills/<name>/ (a direct

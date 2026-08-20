@@ -1,0 +1,65 @@
+name: validate
+
+# 検査のみで書き込みは行わない。各ジョブはサードパーティのアクションと npm の
+# 依存ツリーを実行するため、GITHUB_TOKEN を読み取り専用に固定する。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install PyYAML
+        run: python -m pip install "PyYAML==6.0.2"
+      - name: Run validator unit tests
+        run: python -m unittest discover -s tests -p "test_*.py"
+      - name: Validate SKILL.md frontmatter
+        run: python scripts/validate_skills.py
+      - name: Validate marketplace catalog
+        run: python scripts/validate_marketplace.py
+      - name: Validate Japanese punctuation
+        run: python scripts/validate_text.py
+
+  lint-python:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      # ruff は固定する。ruff.toml の select はルールグループ指定なので、更新で
+      # グループに追加されたルールが自動的に有効になり、無関係な PR が落ちる。
+      - uses: astral-sh/ruff-action@v3
+        with:
+          version: "0.15.8"
+      - name: Lint
+        run: ruff check
+      - name: Format
+        run: ruff format --check
+
+  lint-markdown:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      # min-release-age を実際に適用するには npm 11.6 以降が必要。Node 24 に同梱
+      # される npm がこれを満たす。.npmrc の設定だけでは古い npm は素通しになる。
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Lint Markdown structure
+        run: npm run lint-markdown
+      - name: Lint Japanese prose
+        run: npm run lint-text

@@ -23,7 +23,7 @@ description: "Review a pull request against a project's style, naming, and struc
 ## このスキルの構成（骨格と本文の分離）
 
 | 役割 | 置き場所 |
-|---|---|
+| --- | --- |
 | レビュー手順・出力フォーマット・拡張ガイド（本ファイル） | 本リポジトリ（横断・不変の骨格） |
 | 実際のレビュー観点（命名・CSS・構造などの規約本文と例） | 各プロジェクトの `.claude/skills/review-pr/rules/`・`examples/` |
 | セキュリティ観点（フレームワーク・プラットフォーム由来） | 本リポジトリの `rules/security/`（本スキルに同梱） |
@@ -45,7 +45,7 @@ description: "Review a pull request against a project's style, naming, and struc
 依頼内容から、そのプロジェクトの `rules/` 配下の参照ファイルを決定する。実際のカテゴリはプロジェクト側が定義するが、典型的な対応は次の通り:
 
 | 依頼パターン | 参照ファイル（プロジェクトの `rules/` 配下） |
-|---|---|
+| --- | --- |
 | 「PR レビュー」「全体レビュー」「コードレビュー」 | `rules/**/*.md` 全て + 本スキルの `rules/security/`（下記の検出条件に一致するもの） |
 | 「スタイル」「命名」「CSS」「構造」関連 | `rules/style/*.md` |
 | 「命名だけ」 | `rules/style/naming.md` |
@@ -58,7 +58,7 @@ description: "Review a pull request against a project's style, naming, and struc
 セキュリティ観点だけは依頼の言葉ではなく、**リポジトリ側の構成**で読むファイルを決める。該当しないファイルは読まない。
 
 | 検出条件 | 参照ファイル |
-|---|---|
+| --- | --- |
 | 常に | `rules/security/boundary.md` |
 | `package.json` の依存に `wrangler` がある | `rules/security/cloudflare-workers.md` |
 | `package.json` の依存に `next` がある（※） | `rules/security/nextjs.md` |
@@ -129,5 +129,5 @@ description: "Review a pull request against a project's style, naming, and struc
 - **`rules/security/` にフレームワーク別ファイルを足すとき**（`nextjs.md`・`react-router.md` など）は、冒頭に対象バージョンを明記し、範囲外は「未検証」と書く。フレームワークの世代交代で内容が陳腐化しても、配布先からは古さが見えないため。同じフレームワークでも設定（SSR の有無など）で結論が反転するものは、フレームワーク名ではなく設定値で分岐させて書く
 - **`rules/security/` にファイルを足したら**「観点の選択」の検出条件テーブルにも行を足す。検出条件が書かれていないファイルは読まれない。検出条件は**依存パッケージ**で書く（設定ファイルは省略可能なことが多く、取りこぼす）。ただしパッケージ名は**そのルールが対象とする使い方に固有のもの**を選ぶ。広く使われるパッケージ名を条件にすると、対象外の構成まで拾って全項目が空振りする（例: `react-router` は library mode でも入るので framework mode の判定に使えない）。依存だけで区別できない場合は、ディレクトリの有無など補助条件を注記する
 - **`boundary.md` は常に読まれる**ため、フレームワーク別ファイルと必ず同時に読まれる。同じ論点を両方に詳しく書かず、`boundary.md` に原則、フレームワーク別に具体的な機構と見つけ方を置く（`writing.md`「ファイルを増やすのは、読み込み単位を分けたいときだけ」）
-- **手順・出力フォーマット・重要度分類そのものを変えるとき**は本ファイルを更新する。骨格の変更は全プロジェクトへ影響するため、取り込み済みプロジェクトとの整合を確認する。
-- 同じ観点が複数プロジェクトの `rules/` で実質同一になったら、その観点の共通部分も本リポジトリへ昇格できないか検討する（判断基準は `../create-skill/rules/placement.md`）。
+- **手順・出力フォーマット・重要度分類そのものを変えるとき**は本ファイルを更新する。骨格の変更は全プロジェクトへ影響するため、取り込み済みプロジェクトとの整合を確認する
+- 同じ観点が複数プロジェクトの `rules/` で実質同一になったら、その観点の共通部分も本リポジトリへ昇格できないか検討する（判断基準は `../create-skill/rules/placement.md`）

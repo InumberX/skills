@@ -9,7 +9,7 @@
 同じ App Router でも、設定次第でサーバーが動くかどうかが変わる。
 
 | 設定 | 実行時の姿 | 主な論点 |
-|---|---|---|
+| --- | --- | --- |
 | 既定（SSR / RSC） | リクエスト時にサーバーが動く | 1〜5すべて |
 | `next.config.*` の `output: 'export'` | 静的書き出し。Server Action と `proxy.ts` / `middleware.ts` は使えないが、**Route Handler は GET のみ利用でき**（`dynamic = 'force-static'` で事前生成）、応答は静的ファイルとして公開される | 3・5（生成物への埋め込み） |
 | セグメントの `dynamic = 'force-static'` / `revalidate` | 応答が生成・使い回される | 5（キャッシュの共有範囲） |

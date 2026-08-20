@@ -22,7 +22,7 @@ description: "Write commit messages and pull request descriptions that follow th
 
 ### 形式
 
-```
+```text
 <prefix>: <imperative summary>
 ```
 
@@ -36,7 +36,7 @@ description: "Write commit messages and pull request descriptions that follow th
 Conventional Commits の標準型に揃える（履歴で頻出のものを上に置く）:
 
 | プレフィックス | 用途 | 例 |
-|---|---|---|
+| --- | --- | --- |
 | `feat:` | **機能・要素の追加はすべてこれに統一**（規模の大小を問わない） | `feat: PrimitiveButton ベースコンポーネントを追加` / `feat: home latest works` |
 | `fix:` | バグ修正・既存の挙動や見た目（CSS 等）の不具合修正 | `fix: header mobile button` |
 | `refactor:` | ランタイム挙動は変えないが、コード構造・型表現を変更する（`import type` 化・型注釈の追加・リネーム・抽出など） | `refactor: type のみで使用する import に type 修飾子を付与` |
@@ -51,6 +51,7 @@ Conventional Commits の標準型に揃える（履歴で頻出のものを上�
 > **依存パッケージの更新は `chore(deps):`。** スコープ `(deps)` で依存更新であることを明示する（例: `chore(deps): update vite`）。
 
 > **旧慣習は真似しない（git log で見ても使わない）。** 過去の履歴には次の書き方が残っているが、いずれも新規コミットでは使わない。過去コミットの書き換えは不要。
+>
 > - `add:` → 追加はすべて `feat:`（Conventional Commits 標準外・`feat:` と境界が曖昧なため）
 > - `style:` → 型・構造の変更は `refactor:`、機械的な整形は oxfmt 任せ（手書きの整形コミットはほぼ不要）
 > - プレフィックスなしの `update library` や英文の平叙文 → 依存更新は `chore(deps):`、その他は標準型を必ず付ける

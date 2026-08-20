@@ -31,7 +31,7 @@ def frontmatter(name: str, description_line: str) -> str:
 
 class TestSplitFrontmatter(unittest.TestCase):
     def test_valid_block_is_returned(self):
-        text = "---\nname: x\ndescription: \"y\"\n---\nbody\n"
+        text = '---\nname: x\ndescription: "y"\n---\nbody\n'
         self.assertEqual(validate_skills.split_frontmatter(text), 'name: x\ndescription: "y"\n')
 
     def test_crlf_delimiters(self):
@@ -96,7 +96,8 @@ class TestCheck(unittest.TestCase):
 
     def test_valid_description_with_colon(self):
         md = self.write_skill(
-            "do-thing", frontmatter("do-thing", 'description: "Prefixes like feat: and fix: are fine."')
+            "do-thing",
+            frontmatter("do-thing", 'description: "Prefixes like feat: and fix: are fine."'),
         )
         self.assertEqual(validate_skills.check(md), [])
 
