@@ -125,7 +125,9 @@ class TestCheck(unittest.TestCase):
         self.assertTrue(any("duplicate" in e for e in errs))
 
     def test_bundle_with_no_skills_is_flagged(self):
-        self._write_catalog({"name": "inumberx-skills", "owner": {"name": "X"}, "plugins": [_bundle_entry()]})
+        self._write_catalog(
+            {"name": "inumberx-skills", "owner": {"name": "X"}, "plugins": [_bundle_entry()]}
+        )
         errs = validate_marketplace.check()
         self.assertTrue(any("bundle source has no skills" in e for e in errs))
 
@@ -175,7 +177,9 @@ class TestCheck(unittest.TestCase):
         self._make_skill("review-pr")
         self._write_catalog(_catalog(["create-pr"]))  # review-pr unpublished
         errs = validate_marketplace.check()
-        self.assertTrue(any("without a per-skill marketplace entry" in e and "review-pr" in e for e in errs))
+        self.assertTrue(
+            any("without a per-skill marketplace entry" in e and "review-pr" in e for e in errs)
+        )
 
     def test_stale_entry_is_flagged(self):
         self._make_skill("create-pr")

@@ -6,7 +6,10 @@
     "test": "tests"
   },
   "scripts": {
-    "lint-text": "textlint \"README.md\" \"skills/**/*.md\""
+    "lint-markdown": "markdownlint-cli2",
+    "lint-text": "textlint \"README.md\" \"skills/**/*.md\"",
+    "lint-markdown-fix": "markdownlint-cli2 --fix",
+    "lint-text-fix": "textlint --fix \"README.md\" \"skills/**/*.md\""
   },
   "repository": {
     "type": "git",
@@ -17,8 +20,12 @@
   },
   "homepage": "https://github.com/InumberX/skills#readme",
   "devDependencies": {
+    "markdownlint-cli2": "^0.23.2",
     "textlint": "^15.8.0",
     "textlint-rule-preset-jtf-style": "^3.0.3"
   },
-  "private": true
+  "private": true,
+  "engines": {
+    "node": ">=24.0.0"
+  }
 }

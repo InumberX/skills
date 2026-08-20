@@ -66,9 +66,7 @@ def check(skill_md: Path) -> list[str]:
         if not KEBAB_CASE.match(name):
             errors.append(f"`name` must be kebab-case, got {name!r}")
         if name != skill_md.parent.name:
-            errors.append(
-                f"`name` ({name!r}) must match its directory ({skill_md.parent.name!r})"
-            )
+            errors.append(f"`name` ({name!r}) must match its directory ({skill_md.parent.name!r})")
 
     description = data.get("description")
     if not isinstance(description, str) or not description.strip():
@@ -79,8 +77,7 @@ def check(skill_md: Path) -> list[str]:
         # single-quoted or plain value that merely contains a double quote —
         # e.g. description: '"x"' — cannot slip through.
         errors.append(
-            "`description` must be a double-quoted YAML scalar "
-            "(see create-skill/rules/format.md)"
+            "`description` must be a double-quoted YAML scalar (see create-skill/rules/format.md)"
         )
 
     return errors

@@ -5,7 +5,7 @@ description: "<What this skill does + when to use it, in English. Include concre
 
 # <skill-name>
 
-<このスキルが何をするかの一文。対象範囲(どのコード・どの成果物か)も書く。>
+<このスキルが何をするかの一文。対象範囲（どのコード・どの成果物か）も書く。>
 
 ## いつ発動するか
 
@@ -22,10 +22,10 @@ description: "<What this skill does + when to use it, in English. Include concre
 
 <手順の説明。分割ファイルを読むタイミングはここで指示する。>
 
-### 2. <観点の選択(分割ファイルがある場合)>
+### 2. <観点の選択（分割ファイルがある場合）>
 
 | 依頼パターン | 参照ファイル |
-|---|---|
+| --- | --- |
 | 「<パターン>」 | `rules/<category>/<file>.md` |
 
 ### 3. <実行>
@@ -36,6 +36,6 @@ description: "<What this skill does + when to use it, in English. Include concre
 
 <成果物の形式。テンプレートがあれば示す。>
 
-## 拡張ガイド(将来の作業者向け)
+## 拡張ガイド（将来の作業者向け）
 
 <観点・ファイルの追加手順。「既存ファイルへの追記で済まないか先に検討する」を含める。>

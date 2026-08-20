@@ -1,0 +1,13 @@
+# CI と同じ Python バージョンを前提に検査する（.github/workflows/validate-skills.yml）。
+target-version = "py312"
+
+# 既存コードに合わせる。88 だと説明的な1行が機械的に折られて読みにくくなる。
+line-length = 100
+
+[lint]
+# 既定の E4/E7/E9・F に加えて、標準ライブラリのみで書く方針を保てる範囲で広げる。
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+
+# RUF001-003 は全角の記号を「半角と紛らわしい」として警告する。本リポジトリは
+# コメントと docstring を日本語で書くため、全角の（）や、。は意図したものである。
+ignore = ["RUF001", "RUF002", "RUF003"]

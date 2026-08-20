@@ -21,3 +21,32 @@ jobs:
         run: python scripts/validate_skills.py
       - name: Validate marketplace catalog
         run: python scripts/validate_marketplace.py
+      - name: Validate Japanese punctuation
+        run: python scripts/validate_text.py
+
+  lint-python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/ruff-action@v3
+      - name: Lint
+        run: ruff check
+      - name: Format
+        run: ruff format --check
+
+  lint-markdown:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # min-release-age を実際に適用するには npm 11.6 以降が必要。Node 24 に同梱
+      # される npm がこれを満たす。.npmrc の設定だけでは古い npm は素通しになる。
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Lint Markdown structure
+        run: npm run lint-markdown
+      - name: Lint Japanese prose
+        run: npm run lint-text

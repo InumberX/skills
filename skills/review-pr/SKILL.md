@@ -23,7 +23,7 @@ description: "Review a pull request against a project's style, naming, and struc
 ## このスキルの構成（骨格と本文の分離）
 
 | 役割 | 置き場所 |
-|---|---|
+| --- | --- |
 | レビュー手順・出力フォーマット・拡張ガイド（本ファイル） | 本リポジトリ（横断・不変の骨格） |
 | 実際のレビュー観点（命名・CSS・構造などの規約本文と例） | 各プロジェクトの `.claude/skills/review-pr/rules/`・`examples/` |
 | セキュリティ観点（フレームワーク・プラットフォーム由来） | 本リポジトリの `rules/security/`（本スキルに同梱） |
@@ -45,7 +45,7 @@ description: "Review a pull request against a project's style, naming, and struc
 依頼内容から、そのプロジェクトの `rules/` 配下の参照ファイルを決定する。実際のカテゴリはプロジェクト側が定義するが、典型的な対応は次の通り:
 
 | 依頼パターン | 参照ファイル（プロジェクトの `rules/` 配下） |
-|---|---|
+| --- | --- |
 | 「PR レビュー」「全体レビュー」「コードレビュー」 | `rules/**/*.md` 全て + 本スキルの `rules/security/`（下記の検出条件に一致するもの） |
 | 「スタイル」「命名」「CSS」「構造」関連 | `rules/style/*.md` |
 | 「命名だけ」 | `rules/style/naming.md` |
@@ -58,7 +58,7 @@ description: "Review a pull request against a project's style, naming, and struc
 セキュリティ観点だけは依頼の言葉ではなく、**リポジトリ側の構成**で読むファイルを決める。該当しないファイルは読まない。
 
 | 検出条件 | 参照ファイル |
-|---|---|
+| --- | --- |
 | 常に | `rules/security/boundary.md` |
 | `package.json` の依存に `wrangler` がある | `rules/security/cloudflare-workers.md` |
 | `package.json` の依存に `next` がある（※） | `rules/security/nextjs.md` |
