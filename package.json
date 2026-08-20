@@ -1,0 +1,24 @@
+{
+  "name": "inumberx-skills",
+  "version": "0.0.0",
+  "description": "Markdown 文章検査用のツールチェーン。スキル本体は Markdown のみで、実行時の Node 依存は無い。",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "lint-text": "textlint \"README.md\" \"skills/**/*.md\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/InumberX/skills.git"
+  },
+  "bugs": {
+    "url": "https://github.com/InumberX/skills/issues"
+  },
+  "homepage": "https://github.com/InumberX/skills#readme",
+  "devDependencies": {
+    "textlint": "^15.8.0",
+    "textlint-rule-preset-jtf-style": "^3.0.3"
+  },
+  "private": true
+}
