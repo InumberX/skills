@@ -89,4 +89,8 @@ CI（`.github/workflows/validate.yml`）で自動実行する。ローカルで�
 
 textlint のルール名は**報告される ID と完全に一致させる**。1文字でも違うと一致せず、無効化したつもりのルールが有効なまま残る。設定を変えたら `npx textlint --print-config` で実際に外れたかを確認すること。
 
-Node の依存は文章検査のためだけにあり、スキル本体は Markdown のみで動く。npm パッケージは `.npmrc` の `min-release-age=1` により、公開から1日経過したもののみを取得する（この設定が実際に効くのは npm 11.6 以降。CI は Node 24 を使う）。
+Node の依存は文章検査のためだけにあり、スキル本体は Markdown のみで動く。
+
+検査対象の glob は `.markdownlint-cli2.jsonc` の `globs`、`package.json` の `lint-text`、`scripts/validate_text.py` の `TARGETS` の3箇所にある。textlint は対象を設定ファイルに書けないため一元化できていない。**対象を変えるときは3箇所そろえる。** 揃っていないと、そのツールだけ検査せずに成功として通る。
+
+`.npmrc` の `min-release-age=1` により、依存を追加・更新するときに公開から1日経過したパッケージのみが選ばれる。**効くのは手元で `npm install` / `npm update` を実行するときだけ**で、そこに npm 11.6 以降が要る（Node 24 に同梱されるものが該当する）。CI が実行する `npm ci` はロックファイルの内容をそのまま入れるため、公開日を再確認しない。

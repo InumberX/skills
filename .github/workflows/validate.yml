@@ -1,5 +1,8 @@
 name: validate
 
+# 検査のみで書き込みは行わない。各ジョブはサードパーティのアクションと npm の
+# 依存ツリーを実行するため、GITHUB_TOKEN を読み取り専用に固定する。
+
 on:
   push:
     branches: [main]
@@ -8,6 +11,8 @@ on:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -26,6 +31,8 @@ jobs:
 
   lint-python:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       # ruff は固定する。ruff.toml の select はルールグループ指定なので、更新で
@@ -40,6 +47,8 @@ jobs:
 
   lint-markdown:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       # min-release-age を実際に適用するには npm 11.6 以降が必要。Node 24 に同梱

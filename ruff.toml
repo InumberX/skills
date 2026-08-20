@@ -1,5 +1,9 @@
-# CI と同じ Python バージョンを前提に検査する（.github/workflows/validate-skills.yml）。
+# CI と同じ Python バージョンを前提に検査する（.github/workflows/validate.yml）。
 target-version = "py312"
+
+# CI が固定しているバージョンと手元を揃える（.github/workflows/validate.yml）。
+# ずれていると「ローカルでは通るのに CI で落ちる」が起きる。
+required-version = "==0.15.8"
 
 # 既存コードに合わせる。88 だと説明的な1行が機械的に折られて読みにくくなる。
 line-length = 100

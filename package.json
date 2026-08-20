@@ -8,8 +8,8 @@
   "scripts": {
     "lint-markdown": "markdownlint-cli2",
     "lint-text": "textlint \"*.md\" \"skills/**/*.md\"",
-    "lint-markdown-fix": "markdownlint-cli2 --fix",
-    "lint-text-fix": "textlint --fix \"*.md\" \"skills/**/*.md\""
+    "lint-markdown-fix": "npm run lint-markdown -- --fix",
+    "lint-text-fix": "npm run lint-text -- --fix"
   },
   "repository": {
     "type": "git",
