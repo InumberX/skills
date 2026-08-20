@@ -123,16 +123,5 @@ class TargetsTest(unittest.TestCase):
         self.assertEqual(targets, sorted(set(targets)))
 
 
-class RepositoryTest(unittest.TestCase):
-    def test_repository_is_clean(self):
-        """本番のファイルが規約を満たしていること（CI と同じ判定）。"""
-        failures = {
-            p.relative_to(validate_text.REPO_ROOT).as_posix(): errors
-            for p in validate_text.iter_targets()
-            if (errors := validate_text.check(p))
-        }
-        self.assertEqual(failures, {})
-
-
 if __name__ == "__main__":
     unittest.main()

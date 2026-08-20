@@ -1,6 +1,7 @@
 {
-  // 対象は Markdown のみ。node_modules は除外する。
-  "globs": ["README.md", "skills/**/*.md"],
+  // 検査対象を明示列挙する。node_modules 配下の Markdown はここに含まれない
+  // ため、除外の指定は要らない。
+  "globs": ["*.md", "skills/**/*.md"],
   "config": {
     // 日本語の本文は折り返さない方針のため、行長は検査しない。
     "MD013": false,

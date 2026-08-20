@@ -1,4 +1,4 @@
-name: validate-skills
+name: validate
 
 on:
   push:
@@ -28,7 +28,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # ruff は固定する。ruff.toml の select はルールグループ指定なので、更新で
+      # グループに追加されたルールが自動的に有効になり、無関係な PR が落ちる。
       - uses: astral-sh/ruff-action@v3
+        with:
+          version: "0.15.8"
       - name: Lint
         run: ruff check
       - name: Format

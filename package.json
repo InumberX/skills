@@ -7,9 +7,9 @@
   },
   "scripts": {
     "lint-markdown": "markdownlint-cli2",
-    "lint-text": "textlint \"README.md\" \"skills/**/*.md\"",
+    "lint-text": "textlint \"*.md\" \"skills/**/*.md\"",
     "lint-markdown-fix": "markdownlint-cli2 --fix",
-    "lint-text-fix": "textlint --fix \"README.md\" \"skills/**/*.md\""
+    "lint-text-fix": "textlint --fix \"*.md\" \"skills/**/*.md\""
   },
   "repository": {
     "type": "git",

@@ -69,11 +69,11 @@ skills/
 
 ### 公開物の検査
 
-`scripts/validate_marketplace.py` が `marketplace.json` の妥当性と `skills/` ディレクトリとの同期（登録漏れ・削除済みエントリの残存）を機械的に検査する。`.github/workflows/validate-skills.yml` が push(main) と全 PR で自動実行するため、スキルを追加・削除したら `marketplace.json` のエントリも合わせて更新する（ローカルでは `python3 scripts/validate_marketplace.py`）。
+`scripts/validate_marketplace.py` が `marketplace.json` の妥当性と `skills/` ディレクトリとの同期（登録漏れ・削除済みエントリの残存）を機械的に検査する。`.github/workflows/validate.yml` が push(main) と全 PR で自動実行するため、スキルを追加・削除したら `marketplace.json` のエントリも合わせて更新する（ローカルでは `python3 scripts/validate_marketplace.py`）。
 
 ## 検査の一覧
 
-CI（`.github/workflows/validate-skills.yml`）で自動実行する。ローカルでも同じコマンドで再現できる。
+CI（`.github/workflows/validate.yml`）で自動実行する。ローカルでも同じコマンドで再現できる。
 
 | 対象 | コマンド | 内容 |
 | --- | --- | --- |
@@ -85,6 +85,8 @@ CI（`.github/workflows/validate-skills.yml`）で自動実行する。ローカ
 | 日本語の文章 | `npm run lint-text` | 箇条書きの句点統一など（textlint） |
 | Python | `ruff check` / `ruff format --check` | lint と整形 |
 
-`lint-markdown` と `lint-text` には `-fix` 版がある。**括弧の検査を textlint ではなく専用スクリプトで行っているのは意図的**で、textlint の `4.3.1.丸かっこ（）` は見出し・テーブル・引用を検査対象から外すうえ、自動修正が開き括弧だけを全角へ変えて閉じ括弧を半角のまま残すことがあるため。無効化したルールの判断根拠は `.textlintrc.json` のコミット履歴に残してあるので、設定を変更する場合はまず `git log` で経緯を確認すること。
+`lint-markdown` と `lint-text` には `-fix` 版がある。**括弧の検査を textlint ではなく専用スクリプトで行っているのは意図的**で、textlint の `4.3.1.丸かっこ（）` は見出し・テーブル・引用を検査対象から外すうえ、自動修正が開き括弧だけを全角へ変えて閉じ括弧を半角のまま残すことがあるため。無効化した各ルールの判断根拠は `.textlintrc.yml` にコメントとして書いてある。
+
+textlint のルール名は**報告される ID と完全に一致させる**。1文字でも違うと一致せず、無効化したつもりのルールが有効なまま残る。設定を変えたら `npx textlint --print-config` で実際に外れたかを確認すること。
 
 Node の依存は文章検査のためだけにあり、スキル本体は Markdown のみで動く。npm パッケージは `.npmrc` の `min-release-age=1` により、公開から1日経過したもののみを取得する（この設定が実際に効くのは npm 11.6 以降。CI は Node 24 を使う）。

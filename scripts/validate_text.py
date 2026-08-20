@@ -18,6 +18,10 @@ formats them the same way as body text. Parentheses that wrap no Japanese
 character — `push(main)`, `redirect(to)` — are left alone, so real code
 samples are unaffected.
 
+Matching is per line, so a pair split across a line break is not detected. The
+Markdown here is written without hard wrapping, which keeps every pair on one
+line; revisit this if that convention changes.
+
 Exit code is non-zero if any file fails.
 """
 
@@ -29,8 +33,10 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
-# Files to check: the README plus every Markdown file shipped with a skill.
-TARGETS = ("README.md", "skills/**/*.md")
+# Files to check: every Markdown file at the repository root plus everything
+# shipped with a skill. The root pattern is a glob rather than `README.md` so a
+# document added later is covered without editing this list.
+TARGETS = ("*.md", "skills/**/*.md")
 
 # Hiragana, katakana, CJK ideographs, the prolonged-sound mark, iteration mark
 # and the Japanese quotation/punctuation marks that appear inside parentheses.
