@@ -1,6 +1,8 @@
 # セキュリティ観点: Cloudflare Workers
 
-対象: Wrangler の設定ファイル（`wrangler.jsonc` / `wrangler.json` / `wrangler.toml`）と Worker のエントリポイント
+対象: Wrangler 4 系の設定ファイル（`wrangler.jsonc` / `wrangler.json` / `wrangler.toml`）と Worker のエントリポイント。3 系以前は未検証（JSON 形式の設定は 3.91 以降、`run_worker_first` はさらに後の追加のため、項目1と3がそのまま当てはまらない）。
+
+一般原則は `boundary.md` にある。ここではその具体化だけを書くので、両方読んだときは指摘を片方にまとめる。
 
 Worker で認証・認可のゲートを実装している場合、**ゲートのコードを一切変えなくても、設定1行の変更でゲートが無効化される**。設定ファイルが差分に含まれていたら必ず確認する。
 
