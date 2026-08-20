@@ -36,11 +36,15 @@ TARGETS = ("README.md", "skills/**/*.md")
 # and the Japanese quotation/punctuation marks that appear inside parentheses.
 JAPANESE = r"[ぁ-んァ-ヶー一-龥々「」『』、。・]"
 
-# A half-width pair with no nested parenthesis, wrapping at least one Japanese
-# character.
+# A half-width pair wrapping at least one Japanese character. Nested *half-width*
+# parentheses are excluded so the match stays on the innermost pair; a nested
+# full-width pair is allowed through, because the outer half-width pair is still
+# the violation to report — `(あ（い）う)` is flagged on its outer brackets.
 HALF_WIDTH_PAIR = re.compile(rf"\([^()]*{JAPANESE}[^()]*\)")
 
-# A pair whose brackets disagree in width.
+# A pair whose brackets disagree in width. Both widths are excluded from the
+# body so that a correctly paired inner group cannot be read as the closing
+# bracket of an outer one.
 MISMATCHED_PAIR = re.compile(r"（[^（）()]*\)|\([^（）()]*）")
 
 

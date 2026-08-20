@@ -104,6 +104,12 @@ class CheckTest(unittest.TestCase):
     def test_nested_pairs_do_not_report_a_mismatch(self):
         self.assertClean("外側（内側（さらに内）まで）を書く\n")
 
+    def test_half_width_wrapping_a_full_width_pair_is_flagged(self):
+        # 内側が全角でも、外側の半角括弧が違反として報告される。
+        errors = self.check("外側(内側（さらに内）まで)を書く\n")
+        self.assertEqual(len(errors), 1)
+        self.assertIn("半角括弧", errors[0])
+
 
 class TargetsTest(unittest.TestCase):
     def test_repository_files_are_discovered(self):
