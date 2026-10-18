@@ -55,7 +55,7 @@ skills/
 /plugin marketplace update inumberx-skills
 ```
 
-インストールしたスキルは自動発見・自動発動され、スラッシュ形式では `/review-pr` のように呼び出せる。配布しているプラグインは、全部入りの `inumberx-skills` と、個別の `create-pr` / `create-skill` / `review-pr` / `write-commit`。
+インストールしたスキルは自動発見・自動発動され、スラッシュ形式では `/review-pr` のように呼び出せる。配布しているプラグインは、全部入りの `inumberx-skills` と、個別の `create-pr` / `create-skill` / `hand-off-context` / `review-pr` / `write-commit`。
 
 `review-pr` だけは例外的に観点本文(`rules/security/`)を同梱しており、フレームワーク・プラットフォーム由来のセキュリティ観点は取り込み先で追加設定なしに使える。スタイル・命名などの観点は従来どおり各プロジェクトの `.claude/skills/review-pr/rules/` に置く。
 
@@ -66,6 +66,20 @@ skills/
 ### 2. 手動コピー
 
 マーケットプレイスを使わない場合は、使いたいスキルを各プロジェクトの `.claude/skills/` へ手動コピーする。取り込み先で改善したら本リポジトリに還元する。
+
+### 3. Codex で使う（hand-off-context）
+
+`hand-off-context` は Claude Code と Codex の間で作業を引き継ぐスキルのため、Codex 側にも置く。Codex はリポジトリ内の `.agents/skills/` を読み込む（パスは [Codex の公式ドキュメント](https://developers.openai.com/codex/skills) で確認する）。
+
+```text
+project/
+├── .agents/skills/hand-off-context/   # Codex 用。skills/hand-off-context/ をコピーする
+└── .claude/skills/hand-off-context/   # Claude Code 用。プラグインで導入するなら不要
+```
+
+両方に同じ実体を置きたい場合は、`.claude/skills/hand-off-context` から `../../.agents/skills/hand-off-context` へのシンボリックリンクにしてもよい。Windows ではシンボリックリンクに開発者モードと `git config core.symlinks true` が要るため、コピーを標準とする。
+
+呼び出しは Claude Code が `/hand-off-context export`、Codex が `$hand-off-context import` のようになる。引き継ぎ内容は取り込み先の `.handoff/` に保存され、`.handoff/.gitignore` によって Git の管理対象から外れる。
 
 ### 公開物の検査
 

@@ -8,7 +8,7 @@
     {
       "name": "inumberx-skills",
       "source": "./",
-      "description": "全スキルを一括導入する全部入りプラグイン(create-pr / create-skill / review-pr / write-commit)。review-pr にはフレームワーク/プラットフォーム由来のセキュリティ観点も同梱する。個別に選びたい場合は各スキル名のプラグインを使う。",
+      "description": "全スキルを一括導入する全部入りプラグイン(create-pr / create-skill / hand-off-context / review-pr / write-commit)。review-pr にはフレームワーク/プラットフォーム由来のセキュリティ観点も同梱する。個別に選びたい場合は各スキル名のプラグインを使う。",
       "author": {
         "name": "InumberX"
       },
@@ -34,6 +34,16 @@
       },
       "category": "development",
       "tags": ["skills", "authoring", "meta", "conventions"]
+    },
+    {
+      "name": "hand-off-context",
+      "source": "./skills/hand-off-context",
+      "description": "AI コーディングエージェント間(Claude Code ⇄ Codex など)で、.handoff/handoff.md を介して開発コンテキストを引き継ぐ。export でタスク・進捗・設計判断・変更ファイル・検証結果を書き出し、import で Git の状態と照合して読み込む。",
+      "author": {
+        "name": "InumberX"
+      },
+      "category": "development",
+      "tags": ["handoff", "context", "codex", "workflow"]
     },
     {
       "name": "review-pr",
