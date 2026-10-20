@@ -18,7 +18,7 @@
     {
       "name": "create-pr",
       "source": "./skills/create-pr",
-      "description": "PR 作成の作業フロー(ベース判定 → 差分集約 → テンプレ検出 → 作成)。タイトル・本文の文面規約は write-commit に委譲する。",
+      "description": "PR 作成の作業フロー(ベース判定 → push 前の確認 → 差分集約 → テンプレ検出 → 作成)。別種の作業の分け方、同じ箇所に触る PR の重ね方、複数リポジトリへの横展開も扱う。タイトル・本文の文面規約は write-commit に委譲する。",
       "author": {
         "name": "InumberX"
       },
@@ -78,7 +78,7 @@
     {
       "name": "write-commit",
       "source": "./skills/write-commit",
-      "description": "コミットメッセージと PR 本文の共通規約(プレフィックス語彙・件名の粒度・本文の骨組み)。",
+      "description": "コミットメッセージと PR 本文の共通規約(プレフィックス語彙・件名の粒度・本文の骨組み・タイトルと本文の言語・レビュー対応後の本文の更新)。",
       "author": {
         "name": "InumberX"
       },

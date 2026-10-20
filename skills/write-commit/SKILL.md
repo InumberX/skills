@@ -1,6 +1,6 @@
 ---
 name: write-commit
-description: "Write commit messages and pull request descriptions that follow these projects' shared conventions — short lowercase conventional-style prefixes (feat:/fix:/refactor:/perf:/docs:/test:/ci:/build:/chore:/revert:, with chore(deps): for dependency updates), focused imperative subjects, and a PR body covering summary, linked issue, and local-check confirmation. Use when the user asks to commit changes, write a commit message, or write a PR title/body; the PR-creation workflow itself lives in the create-pr skill, which calls this skill for wording."
+description: "Write commit messages and pull request descriptions that follow these projects' shared conventions — short lowercase conventional-style prefixes (feat:/fix:/refactor:/perf:/docs:/test:/ci:/build:/chore:/revert:, with chore(deps): for dependency updates), focused imperative subjects, and a PR body covering summary, linked issue, and local-check confirmation (only checks that actually ran). Also decides the title/body language and keeps the body in sync after review fixes. Use when the user asks to commit changes, write a commit message, write or update a PR title/body; the PR-creation workflow itself lives in the create-pr skill, which calls this skill for wording."
 ---
 
 # write-commit
@@ -71,10 +71,25 @@ PR 本文には最低限これらを含める:
 - **概要**: 何を・なぜ変更したかの簡潔な説明
 - **関連 Issue / タスク**: あればリンクする
 - **UI 変更**: スクリーンショットまたは Storybook の参照を添える
-- **ローカルチェック**: プロジェクトの標準チェック（例: `npm run pre-commit` = typecheck / lint / format 等。コマンド名はリポジトリにより異なる）をローカルで通したことを明記する
+- **ローカルチェック**: プロジェクトの標準チェック（例: `npm run pre-commit` = typecheck / lint / format 等。コマンド名はリポジトリにより異なる）の実行結果を書く。**実際に実行したものだけを、通ったものとして書く。** 環境の制約で実行できなかったものは「未実行」とし、理由を添える。手元で再現しなかった環境は「未確認」ではなく「未再現」と書き、確かめた環境（OS・ブラウザなど）を併記する
 - **影響範囲の明示**: 設定・依存関係・テストに影響する変更は本文で明示的に呼びかける
 
 PR タイトルもコミットと同じプレフィックス規約に従う。
+
+### タイトルと本文の言語
+
+タイトルと本文の言語は、次の順で決める。
+
+1. ユーザーの指示（「件名は英語、本文は日本語」など）
+2. PR テンプレートの言語
+3. そのリポジトリの最近の PR の言語
+4. 上のどれでも決まらなければ、ユーザーに確認する
+
+コミットメッセージの言語に引きずられない。コミットが英語だと本文まで英語で書きがちだが、本文の言語はコミットとは別に決まる。
+
+### レビュー対応で PR 本文を更新する
+
+レビュー指摘に対応するコミットを push したら、指摘への返信を書く前に、PR 本文の該当する節（変更内容・確認したこと）を差分と突き合わせて更新する。本文が古いままだと、後から読む人は本文と差分のどちらが正しいか判断できない。
 
 > **プロジェクト固有の運用に注意**: ブランチ命名による自動ラベル付け（例: `feature/*` → enhancement、`bugfix/*` / `hotfix/*` → bug）など、リポジトリごとに異なる運用がある。**中央の本スキルには固有ルールを書かず、対象プロジェクトの `AGENTS.md` を確認して従う。**
 
