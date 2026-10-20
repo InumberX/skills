@@ -102,7 +102,7 @@ SECRET_PATTERNS: tuple[tuple[str, str], ...] = (
 SECRET_ASSIGNMENT = (
     "secret-assignment",
     r"(?i)\b(?P<key>[\w.-]*(?:password|passwd|secret|token|api_key|apikey|private_key|credential)"
-    r"[\w.-]*)[\"']?[ \t]*[:=][ \t]*[\"']?(?P<value>[^\s\"'`,;)\u3000、。]+)",
+    r"[\w.-]*)[\"']?[ \t]*[:=][ \t]*[\"'`]?(?P<value>[^\s\"',;\u3000、。]+)",
 )
 PRIVATE_KEY_BLOCK = re.compile(
     r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?(?:-----END [A-Z ]*PRIVATE KEY-----|\Z)", re.S
@@ -512,11 +512,27 @@ class Finding:
     end: int
 
 
-def is_token_count(match: re.Match[str]) -> bool:
-    if "key" not in match.re.groupindex or not NUMBER.match(match.group("value")):
+def is_token_count(match: re.Match[str], value: str) -> bool:
+    if "key" not in match.re.groupindex or not NUMBER.match(value):
         return False
     words = {word.lower() for word in SECRET_KEY_WORDS.findall(match.group("key"))}
     return words == {"token"}
+
+
+def trim_value(value: str, punctuation: str = "") -> str:
+    """Drop characters that close the code around a value, not the value itself.
+
+    `f(token=None)` and `` `token=None` `` end in a bracket or backtick that
+    belongs to the call or the code span. Only a trailing backtick, an
+    unbalanced trailing ")" and the given punctuation are dropped, so
+    `password=ab)cd1234` is masked whole; ending the value at the first ")"
+    would leave `cd1234` in the file.
+    """
+    while value and (
+        value[-1] in "`" + punctuation or (value[-1] == ")" and value.count(")") > value.count("("))
+    ):
+        value = value[:-1]
+    return value
 
 
 def find_secrets(text: str) -> list[Finding]:
@@ -526,9 +542,14 @@ def find_secrets(text: str) -> list[Finding]:
         # boundary in "トークンはghp_..." and the token would go undetected.
         for match in re.finditer(pattern, text, re.ASCII):
             if "value" in match.re.groupindex:
-                if PLACEHOLDER.match(match.group("value")) or is_token_count(match):
+                # Sentence punctuation is ignored when deciding whether this is a
+                # placeholder ("def f(token=None):"), but kept inside the masked
+                # span: masking one character too many leaks nothing.
+                bare = trim_value(match.group("value"), punctuation=":.!?")
+                if not bare or PLACEHOLDER.match(bare) or is_token_count(match, bare):
                     continue
-                start, end = match.span("value")
+                start = match.start("value")
+                end = start + len(trim_value(match.group("value")))
             elif kind == "private-key":
                 block = PRIVATE_KEY_BLOCK.match(text, match.start())
                 start, end = match.start(), block.end() if block else match.end()
@@ -765,13 +786,16 @@ def cmd_clear(args: argparse.Namespace) -> int:
     if not targets:
         print("nothing to delete")
         return 0
-    for path in targets:
-        print(f"{'delete' if args.yes else 'would delete'} {path.relative_to(root).as_posix()}")
     if not args.yes:
+        for path in targets:
+            print(f"would delete {path.relative_to(root).as_posix()}")
         print(f"{len(targets)} file(s); re-run with --yes after the user confirms")
         return 0
+    # Report each file only after it is gone, so a failure part-way leaves an
+    # accurate record of what was deleted.
     for path in targets:
         path.unlink()
+        print(f"deleted {path.relative_to(root).as_posix()}")
     print(f"deleted {len(targets)} file(s)")
     return 0
 
@@ -839,9 +863,13 @@ def main(argv: list[str] | None = None) -> int:
     except OSError as exc:
         # Permission denied, disk full and the like: report it plainly instead
         # of a traceback. Writes go through atomic_write, so no file is left
-        # half-written; say so, since that is what the user needs to know.
+        # half-written, and every completed write or deletion was printed.
         print(f"error: {exc}", file=sys.stderr)
-        print("no file was left half-written; check the files listed above", file=sys.stderr)
+        print(
+            "stopped here: files written or deleted so far are listed above;"
+            " no file was left half-written",
+            file=sys.stderr,
+        )
         return 1
 
 

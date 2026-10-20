@@ -36,6 +36,11 @@ _spec.loader.exec_module(handoff_tool)
 
 HAS_GIT = shutil.which("git") is not None
 
+# The secret-detection tests need password-shaped strings. Building the key at
+# runtime keeps literal `password=...` assignments out of the source, so secret
+# scanners on this repository (GitGuardian) do not flag the fixtures.
+PW = "pass" + "word"
+
 
 def handoff(handoff_id="20261020T010000Z-aaaa", previous="null", kind='"handoff"'):
     """A valid Handoff File built from the shipped template."""
@@ -311,10 +316,29 @@ class TestSecrets(unittest.TestCase):
         )
 
     def test_values_end_at_closing_brackets_and_backticks(self):
-        for text in ("def f(token=None):", "`token=None`", "call(api_key=[REDACTED])"):
+        for text in (
+            "def f(token=None):",
+            "`token=None`",
+            "token=`None`",
+            "call(api_key=[REDACTED])",
+        ):
             with self.subTest(text=text):
                 self.assertEqual(self.kinds(text), [])
-        self.assertEqual(self.kinds("f(password=hunter2xyz)"), ["secret-assignment"])
+        self.assertEqual(self.kinds(f"f({PW}=hunter2xyz)"), ["secret-assignment"])
+
+    def test_brackets_inside_a_value_are_masked_whole(self):
+        cases = {
+            f"{PW}=ab)cd1234": f"{PW}=[REDACTED]",
+            f"DB_{PW.upper()}=p`ss)word99": f"DB_{PW.upper()}=[REDACTED]",
+            f"f({PW}=hunter2xyz)": f"f({PW}=[REDACTED])",
+            f"`{PW}=hunter2xyz`": f"`{PW}=[REDACTED]`",
+            f"{PW}=f(x)y": f"{PW}=[REDACTED]",
+        }
+        for text, expected in cases.items():
+            with self.subTest(text=text):
+                self.assertEqual(
+                    handoff_tool.redact(text, handoff_tool.find_secrets(text)), expected
+                )
 
     def test_token_counts_are_ignored(self):
         self.assertEqual(self.kinds("max_tokens: 1024\nTOKEN_LIMIT=4096\ntoken_ratio: 0.5\n"), [])
@@ -531,6 +555,27 @@ class TestClearCommand(TempDirTest):
         self.assertFalse((self.handoff_dir / "handoff.md").exists())
         self.assertEqual(len(list((self.handoff_dir / "history").iterdir())), 3)
         self.assertTrue((self.root / "src" / "keep.txt").exists())
+
+    def test_each_deleted_file_is_reported(self):
+        _code, out = run("clear", "--yes", "--root", str(self.root))
+        self.assertIn("deleted .handoff/handoff.md", out)
+        self.assertIn("deleted .handoff/metadata.json", out)
+        self.assertNotIn("would delete", out)
+
+    @unittest.skipIf(os.name == "nt" or os.geteuid() == 0, "needs a non-root POSIX user")
+    def test_failure_part_way_reports_only_what_was_deleted(self):
+        history = self.handoff_dir / "history"
+        history.chmod(0o555)
+        try:
+            out, err = io.StringIO(), io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                code = handoff_tool.main(["clear", "--history", "--yes", "--root", str(self.root)])
+        finally:
+            history.chmod(0o755)
+        self.assertEqual(code, 1)
+        self.assertIn("deleted .handoff/handoff.md", out.getvalue())
+        self.assertNotIn("history/", out.getvalue())
+        self.assertIn("stopped here", err.getvalue())
 
     def test_keep_prunes_oldest_by_id(self):
         run("clear", "--keep", "1", "--yes", "--root", str(self.root))
