@@ -46,7 +46,8 @@ description: "Turn a mistake, a repeated correction, or a lesson from a session 
 
 ```bash
 git grep -n -i -e '<対象の語>' -e '<動作の語>' -- \
-  ':(glob)**/CLAUDE.md' ':(glob)**/AGENTS.md' ':(glob)**/.claude/**' ':(glob)docs/**'
+  ':(glob)**/CLAUDE.md' ':(glob)**/AGENTS.md' ':(glob)**/.claude/**' \
+  ':(glob)**/.agents/**' ':(glob)docs/**'
 ```
 
 パスは `:(glob)**/` を付けて指定する。`CLAUDE.md` のように書くとリポジトリ直下だけが対象になり、モノレポのパッケージごとに置かれた `CLAUDE.md` や `.claude/` を見落とす。
