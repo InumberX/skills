@@ -1,11 +1,11 @@
 ---
 name: create-pr
-description: "Open a pull request following these projects' conventions — determine the base branch, assemble the diff, write a prefix-style title and a body that fills the repo's PR template (or the standard checklist when none exists), check the push target and run the project's checks before pushing, then create it via the GitHub MCP tools. Also covers splitting mixed work into separate PRs, stacking PRs that touch the same files, and rolling the same change out to several repositories. Use when the user asks to create, open, or raise a pull request. Message/body wording conventions come from the write-commit skill."
+description: "Open a pull request following these projects' conventions — determine the base branch, check the push target and run the project's checks before pushing, assemble the diff, write a prefix-style title and a body that fills the repo's PR template (or the standard checklist when none exists), then create it via the GitHub MCP tools. Also covers splitting mixed work into separate PRs, stacking PRs that touch the same lines, and rolling the same change out to several repositories. Use when the user asks to create, open, or raise a pull request. Message/body wording conventions come from the write-commit skill."
 ---
 
 # create-pr
 
-Pull Request を作成する**手順**を担うスキル。タイトル・本文の**文面規約は `write-commit` スキル**に委ね、本スキルは「ベース判定 → 差分集約 → テンプレ検出 → 作成」という作業フローと、環境依存の確認ポイントを提供する。ベースブランチ・テンプレート・ブランチ命名/ラベル運用は**プロジェクトごとに異なるため、都度検出して従う**（`AGENTS.md` / `.github/` を優先）。
+Pull Request を作成する**手順**を担うスキル。タイトル・本文の**文面規約は `write-commit` スキル**に委ね、本スキルは「ベース判定 → push 前の確認 → 差分集約 → テンプレ検出 → 作成」という作業フローと、環境依存の確認ポイントを提供する。ベースブランチ・テンプレート・ブランチ命名/ラベル運用は**プロジェクトごとに異なるため、都度検出して従う**（`AGENTS.md` / `.github/` を優先）。
 
 ## いつ発動するか
 
