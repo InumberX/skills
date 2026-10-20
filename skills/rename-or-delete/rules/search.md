@@ -22,7 +22,7 @@ git grep -n -- '<name>'
 # 未追跡の新規ファイルも含める場合
 git grep -n --untracked -- '<name>'
 # .gitignore 済みのファイルも含めて探す場合
-grep -rn --exclude-dir=node_modules --exclude-dir=dist -- '<name>' .
+grep -rn --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=dist -- '<name>' .
 ```
 
 ## 名前の揺れ
@@ -40,7 +40,7 @@ grep -rn --exclude-dir=node_modules --exclude-dir=dist -- '<name>' .
 
 import 行の件数をそのまま参照数にしない。次のものが「使用中」として数えられてしまう。
 
-- **Storybook の CSF**：`*.stories.*` は全コンポーネントを import するため、本番で未使用でも参照が残る。対象から外して数える
+- **Storybook の CSF**：`*.stories.*` は、紹介するコンポーネントを必ず import する。そのため、本番で未使用でも参照が残る。対象から外して数える
 - **バレルファイルの再エクスポート**：`index.ts` の `export * from` / `export { X } from` は、それ自体は利用ではない。再エクスポート行は参照数から差し引き、バレルの先で使われているかを追う
 - **名前空間 import**：`import * as M` の場合は、`M.X` の形で使われているかを別に検索する
 

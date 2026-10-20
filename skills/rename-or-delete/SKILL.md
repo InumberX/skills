@@ -41,7 +41,7 @@ description: "Rename or delete code safely by finding every reference before the
 
 ### 3. 変更する
 
-操作に応じて `rules/delete.md` か `rules/rename.md` を読み、その手順で変更する。削除は参照が 0 件のものだけに行う。参照が残っているのに消したい場合は、先に参照側をどうするかをユーザーに確認する。
+操作に応じて `rules/delete.md` か `rules/rename.md` を読み、その手順で変更する。削除は、定義を除いた参照が 0 件のものだけに行う。参照が残っているのに消したい場合は、先に参照側をどうするかをユーザーに確認する。
 
 ### 4. 変更後に同じ検索をもう一度実行する
 
