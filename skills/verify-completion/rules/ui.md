@@ -8,9 +8,16 @@
 
 ```js
 // ブラウザの開発者ツールのコンソールで、変更前と変更後の両方で実行して比べる
-const pick = (el, props) => Object.fromEntries(props.map((p) => [p, getComputedStyle(el)[p]]));
-pick($0, ["width", "height", "margin", "padding", "font-size", "line-height", "transform"]);
+// $0 は、要素パネルで選んでいる要素
+const pick = (el, props) => {
+  const style = getComputedStyle(el);
+  return Object.fromEntries(props.map((p) => [p, style.getPropertyValue(p)]));
+};
+pick($0, ["width", "height", "margin-top", "margin-right", "margin-bottom", "margin-left",
+  "padding-top", "padding-right", "padding-bottom", "padding-left", "font-size", "line-height", "transform"]);
 ```
+
+`margin` や `padding` のような一括指定のプロパティは使わず、`margin-top` のように個別のプロパティで比べる。一括指定では、どの辺がずれたのかが分からないうえ、ブラウザやプロパティによっては computed style で値が返らない。
 
 比べるプロパティは、その部品で指定しているものと、レイアウトに関わるもの（`width`・`margin`・`position`・`display` など）を選ぶ。見た目で違いが分からない 1px のずれも、ここで見つかる。
 
@@ -24,12 +31,16 @@ pick($0, ["width", "height", "margin", "padding", "font-size", "line-height", "t
 
 ```js
 // true なら横にはみ出している
-document.documentElement.scrollWidth > window.innerWidth;
+document.documentElement.scrollWidth > document.documentElement.clientWidth;
 // はみ出している要素を探す
-[...document.querySelectorAll("*")].filter((el) => el.getBoundingClientRect().right > window.innerWidth);
+[...document.querySelectorAll("*")].filter(
+  (el) => el.getBoundingClientRect().right > document.documentElement.clientWidth,
+);
 ```
 
-true になったら、原因の要素を特定してから完了にする。
+幅は `window.innerWidth` ではなく `clientWidth` と比べる。`innerWidth` は縦のスクロールバーの幅を含むため、デスクトップのブラウザでは、スクロールバーの幅までのはみ出しを見逃す。
+
+true になったら、原因の要素を特定してから完了にする。2 つ目の式は、`overflow: hidden` の親の中に収まっている要素も拾う。挙がった要素の祖先をたどり、実際にページをはみ出させている要素を特定する。
 
 画像の表示を変えた（ラッパー、`object-fit`、縦横比の指定）場合は、想定する最小の幅と最大の幅の両方で、縦横比が崩れていないことを確かめる。レスポンシブで表示を切り替える場合は、切り替わる両方の状態を、実際にその分岐が現れる画面で見る。
 
@@ -42,7 +53,7 @@ grep -rhoE 'var\(--[A-Za-z0-9_-]+' <確かめる範囲> | sed 's/^var(//' | sort
   while read -r v; do grep -rqF -- "$v:" <定義している範囲> || echo "未定義: $v"; done
 ```
 
-JavaScript から設定する変数や、別のパッケージで定義される変数は、この検索では見つからない。「未定義」と出たものは、1 件ずつ定義の場所を確かめる。
+JavaScript から設定する変数や、別のパッケージで定義される変数は、この検索では見つからない。`var(--a, 10px)` のように代わりの値を書いている変数は、未定義でも代わりの値で表示される。意図して未定義にしているかを確かめる。「未定義」と出たものは、1 件ずつ定義の場所を確かめる。
 
 ## 外から受け取ったものを取り込んだ
 
@@ -58,4 +69,4 @@ JavaScript から設定する変数や、別のパッケージで定義される
 
 ## ログインやセッションに関わる変更
 
-Cookie の属性（domain・path・有効期限）や、リクエストヘッダーによる判定を変えたら、マージする前に検証環境でログインとログアウトを 1 往復し、その結果を PR に添える。ローカルではドメインや HTTPS の条件が違うため、検証環境でしか起きない問題がある。
+Cookie の属性（domain・path・有効期限）や、リクエストヘッダーによる判定を変えたら、マージする前に検証環境でログインとログアウトを 1 往復し、その結果を PR に添える。ローカルではドメインや HTTPS の条件が違うため、検証環境でしか起きない問題がある。検証環境が無い場合は、ローカルで確かめた範囲と、確かめられなかった条件（ドメイン、HTTPS）を「未実行」として PR に書く。
