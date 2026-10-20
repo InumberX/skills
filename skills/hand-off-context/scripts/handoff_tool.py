@@ -103,20 +103,25 @@ SECRET_PATTERNS: tuple[tuple[str, str], ...] = (
     # of letters cannot make the engine retry the scheme at every position. The
     # user may be empty (`redis://:pw@host`) and the password runs to the last
     # "@" of the authority, so an unencoded "@" inside it is masked too.
-    ("url-credentials", r"(?<![a-z0-9+.-])[a-z][a-z0-9+.-]*://[^/\s:@]*:(?P<value>[^/\s]*)@"),
+    (
+        "url-credentials",
+        r"(?<![A-Za-z0-9+.-])[A-Za-z][A-Za-z0-9+.-]*://[^/\s:@]*:(?P<value>[^/\s]*)@",
+    ),
 )
 # A secret-like key followed by a separator. Everything after the separator up
 # to the end of the line is masked (see secret_assignment_findings): deciding
 # where a value ends is what let parts of secrets through before.
 SECRET_KEY_WORDS_PATTERN = (
-    "password|passwd|secret|token|api_key|apikey|private_key|credential|パスワード"
+    "password|passwd|secret|token|api[_-]?key|private[_-]key|credential|authorization|パスワード"
 )
 SECRET_ASSIGNMENT = (
     "secret-assignment",
     # The key starts at a token boundary (lookbehind) and its prefix is lazy,
     # so the engine tries one start per token instead of every position.
-    rf"(?i)(?<![\w.-])(?P<key>[\w.-]*?(?:{SECRET_KEY_WORDS_PATTERN})[\w.-]*)[\"']?[ \t]*"
-    r"(?::=|==|=>|[:=\uff1a])",
+    # Up to four closing characters may sit between the key and the separator:
+    # `config["password"] =`, `os.environ['TOKEN'] =`, `{\"password\":`.
+    rf"(?i)(?<![\w.-])(?P<key>[\w.-]*?(?:{SECRET_KEY_WORDS_PATTERN})[\w.-]*)"
+    r"[\\\"'`\])]{0,4}[ \t]*(?P<sep>:=|==|=>|[:=\uff1a])",
 )
 PRIVATE_KEY_BLOCK = re.compile(
     r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?(?:-----END [A-Z ]*PRIVATE KEY-----|\Z)", re.S
@@ -140,7 +145,8 @@ SECRET_KEY_WORDS = re.compile(SECRET_KEY_WORDS_PATTERN, re.I)
 NUMBER = re.compile(r"^\d+(?:\.\d+)?$")
 # YAML block scalars (`|`, `>-`) and an opened triple quote put the value on the
 # following lines.
-BLOCK_START = re.compile(r"(?:[|>][-+0-9]*|\"\"\"|\'\'\')[ \t]*(?:#.*)?")
+# A YAML comment needs whitespace before "#": `|#abc` is a value, not a block.
+BLOCK_START = re.compile(r"(?:[|>][-+0-9]*|\"\"\"|\'\'\')(?:[ \t]+#.*)?[ \t]*")
 FRONTMATTER_BLOCK = re.compile(r"\A\ufeff?---[ \t]*\r?\n.*?^---[ \t]*\r?$", re.S | re.M)
 
 
@@ -544,7 +550,22 @@ def is_token_count(key: str, value: str) -> bool:
     return words == {"token"}
 
 
-WORD = re.compile(r"\S+")
+# A value's first word is read at most this far, so a long line without
+# whitespace and with many keys stays linear. A longer word is no placeholder.
+MAX_WORD = 256
+WORD = re.compile(rf"\S{{1,{MAX_WORD + 1}}}")
+NON_SPACE = re.compile(r"\S")
+# Values on lines longer than this are masked to the end of the line without
+# looking for a value continued on later lines (which needs the whole line).
+MAX_ANALYSED_LINE = 4096
+# A value continued on later lines is followed at most this many lines.
+MAX_CONTINUATION_LINES = 200
+# `src/auth/token.ts:42` is a file and line number, not a key and a value.
+FILE_NAME_KEY = re.compile(r"\.[A-Za-z][A-Za-z0-9]{0,5}$")
+# A following line that starts its own key: a quoted key (`"user":`) or a YAML
+# key followed by whitespace or the end of the line (`next: 1`). Anything less
+# clear is taken as the value and masked (`"ab:cd"`, `abc:def`).
+KEY_LINE = re.compile(r"[ \t]*(?:\"[\w.-]+\"|'[\w.-]+'|[\w.-]+)[ \t]*:(?:[ \t]|$)")
 
 
 def sole_word(text: str, start: int, end: int) -> tuple[str | None, bool]:
@@ -557,7 +578,9 @@ def sole_word(text: str, start: int, end: int) -> tuple[str | None, bool]:
     first = WORD.search(text, start, end)
     if first is None:
         return None, False
-    return first.group(), WORD.search(text, first.end(), end) is None
+    if len(first.group()) > MAX_WORD:
+        return first.group(), False
+    return first.group(), NON_SPACE.search(text, first.end(), end) is None
 
 
 def is_placeholder(word: str) -> bool:
@@ -609,41 +632,103 @@ class LineIndex:
 
 
 def indent_of(line: str) -> int:
-    return len(line) - len(line.lstrip(" \t"))
+    """Width of the leading whitespace, with tabs expanded to 8 columns."""
+    return len(line[: len(line) - len(line.lstrip(" \t"))].expandtabs(8))
+
+
+def following_lines(text: str, lines: LineIndex, line_end: int):
+    """(start, end, line) of up to MAX_CONTINUATION_LINES lines after line_end."""
+    pos = line_end
+    for _ in range(MAX_CONTINUATION_LINES):
+        nl = text.find("\n", pos)
+        if nl == -1:
+            return
+        start, end = lines.bounds(nl + 1)
+        yield start, end, text[start:end]
+        pos = end
+
+
+BRACKETS = {"(": ")", "[": "]", "{": "}"}
+
+
+def open_brackets(value: str) -> int:
+    return sum(value.count(o) - value.count(c) for o, c in BRACKETS.items())
+
+
+def unclosed_triple_quote(value: str) -> str | None:
+    for quote in ('"""', "'''"):
+        if value.count(quote) % 2 == 1:
+            return quote
+    return None
 
 
 def continuation_spans(
-    text: str, lines: LineIndex, line_start: int, line_end: int
+    text: str,
+    lines: LineIndex,
+    line_start: int,
+    line_end: int,
+    value: str,
+    empty: bool,
+    by_indent: bool,
 ) -> list[tuple[int, int]]:
-    """Spans of the lines that carry a value continued from the key's line.
+    """Spans of the following lines that carry a value continued from the key's line.
 
-    Those are the following non-blank lines indented deeper than the key's line
-    (YAML block scalars, a value on the next line, call arguments), or, after an
-    opened triple quote, the lines up to the closing one.
+    - An unclosed triple quote: the lines up to the one that closes it.
+    - Brackets left open at the end of the line (`password = (`): the lines
+      until they balance.
+    - A trailing backslash: the lines while each one ends in a backslash.
+    - With by_indent (an empty value, a YAML block scalar, `null` with an
+      indented continuation): the lines indented deeper than the key's line, skipping
+      blank lines. After an empty value, a next line at the same indent that
+      does not start its own key is taken as the value too (`"password":` then
+      `"x"` on the next line).
+
+    All of them stop after MAX_CONTINUATION_LINES lines.
     """
-    key_line = text[line_start:line_end]
-    key_indent = indent_of(key_line)
-    triple = next((q for q in ('"""', "'''") if key_line.rstrip().endswith(q)), None)
+
+    def content(start: int, end: int, line: str) -> tuple[int, int]:
+        return start + len(line) - len(line.lstrip(" \t")), end
+
     spans: list[tuple[int, int]] = []
-    pos = line_end
-    while pos < len(text):
-        nl = text.find("\n", pos)
-        if nl == -1:
-            break
-        start, end = lines.bounds(nl + 1)
-        line = text[start:end]
-        if triple:
+    triple = unclosed_triple_quote(value)
+    if triple:
+        for start, end, line in following_lines(text, lines, line_end):
             if line.strip():
-                spans.append((start + indent_of(line), end))
+                spans.append(content(start, end, line))
             if triple in line:
                 break
-        elif not line.strip():
-            break
-        elif indent_of(line) > key_indent:
-            spans.append((start + indent_of(line), end))
-        else:
-            break
-        pos = end
+        return spans
+    depth = open_brackets(value)
+    # Only a line that ends inside the brackets (`password = (`, `f(password=x,`)
+    # continues; an unclosed "(" in the middle of prose does not.
+    if depth > 0 and value.rstrip()[-1:] in ("(", "[", "{", ","):
+        for start, end, line in following_lines(text, lines, line_end):
+            if line.strip():
+                spans.append(content(start, end, line))
+            depth += open_brackets(line)
+            if depth <= 0:
+                break
+        return spans
+    if value.rstrip().endswith("\\"):
+        for start, end, line in following_lines(text, lines, line_end):
+            spans.append(content(start, end, line))
+            if not line.rstrip().endswith("\\"):
+                break
+        return spans
+    if not by_indent:
+        # A one-line value such as `token: rotate it` followed by an indented
+        # list in prose: the list is not part of the value.
+        return spans
+    key_indent = indent_of(text[line_start:line_end])
+    for start, end, line in following_lines(text, lines, line_end):
+        if not line.strip():
+            continue
+        if indent_of(line) > key_indent:
+            spans.append(content(start, end, line))
+            continue
+        if empty and not spans and not KEY_LINE.match(line):
+            spans.append(content(start, end, line))
+        break
     return spans
 
 
@@ -653,41 +738,53 @@ def secret_assignment_findings(text: str) -> list[Finding]:
     Deciding where a value ends (quotes, escapes, brackets, spaces) kept letting
     part of a secret through, so the rest of the line is masked instead; masking
     too much hides some text, masking too little writes part of a secret out.
-    When the line holds no value, or opens a YAML block scalar or a triple
-    quote, the value is on the following lines and those are masked.
+    When the value continues on later lines (see continuation_spans), those
+    lines are masked too.
     """
     findings: list[Finding] = []
     kind, pattern = SECRET_ASSIGNMENT
     lines = LineIndex(text)
+    # End of the text already masked. A key inside it is masked with it; looking
+    # at it again would rescan the same continuation lines once per key.
+    covered = 0
     for match in re.finditer(pattern, text, re.ASCII):
+        if match.start() < covered:
+            continue
         line_start, line_end = lines.bounds(match.start())
         value_start = match.end()
         while value_start < line_end and text[value_start] in " \t":
             value_start += 1
+        key = match.group("key")
+        if (
+            match.group("sep") == ":"
+            and FILE_NAME_KEY.search(key)
+            and text[value_start : value_start + 1].isdigit()
+        ):
+            continue  # `token.ts:42` is a file name and a line number
         word, single = sole_word(text, value_start, line_end)
-        # fullmatch with pos/endpos: "^" would only match at the start of the text.
-        opens_block = word is not None and BLOCK_START.fullmatch(text, value_start, line_end)
-        if word is not None and not opens_block:
-            if single and (
-                not word.strip("\"'`")  # an empty string such as `password=""`
-                or is_placeholder(word)
-                or is_token_count(match.group("key"), bare_word(word))
-            ):
-                continue
-            spans = [(value_start, line_end)]
-        else:
-            spans = continuation_spans(text, lines, line_start, line_end)
-            if word is not None:
-                spans.insert(0, (value_start, line_end))
-
-            def placeholder_line(span: tuple[int, int]) -> bool:
-                line_word, line_single = sole_word(text, *span)
-                return line_word is not None and line_single and is_placeholder(line_word)
-
-            if not spans or all(placeholder_line(span) for span in spans):
-                continue
+        if line_end - value_start > MAX_ANALYSED_LINE:
+            findings.append(Finding(kind, lines.number(value_start), value_start, line_end))
+            covered = max(covered, line_end)
+            continue
+        value = text[value_start:line_end]
+        empty = word is None
+        skippable = single and (
+            not word.strip("\"'`")  # an empty string such as `password=""`
+            or is_placeholder(word)
+            or is_token_count(key, bare_word(word))
+        )
+        block = not empty and BLOCK_START.fullmatch(value)
+        by_indent = bool(empty or block or skippable)
+        follows = continuation_spans(text, lines, line_start, line_end, value, empty, by_indent)
+        if (empty or skippable) and not follows:
+            # A placeholder or an empty value with nothing continued below it:
+            # there is nothing to mask. A block opener is masked regardless, in
+            # case it is not a block opener after all.
+            continue
+        spans = ([] if empty else [(value_start, line_end)]) + follows
         for start, end in spans:
             findings.append(Finding(kind, lines.number(start), start, end))
+        covered = max(covered, spans[-1][1]) if spans else covered
     return findings
 
 
@@ -899,6 +996,7 @@ def cmd_publish(args: argparse.Namespace) -> int:
                 # Already published, and possibly imported since: re-running must
                 # not reset the status recorded by `mark`. Only tidy up what a
                 # normal publish would have left behind.
+                print_report(report)
                 ensure_gitignore(root, handoff_dir)
                 remove_draft(handoff_dir, draft)
                 print(f"already published {new_id}; the handoff was not changed")

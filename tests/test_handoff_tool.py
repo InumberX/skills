@@ -365,6 +365,20 @@ class TestSecrets(unittest.TestCase):
             f"connect(\n {PW}=\n  'Zq9vK2mX')": f"connect(\n {PW}=\n  [REDACTED]",
             f'{PW} = """\nZq9vK2mX\n"""\nx': f"{PW} = [REDACTED]\n[REDACTED]\n[REDACTED]\nx",
             f"{PW}:\nnext: 1": f"{PW}:\nnext: 1",
+            f'{PW} = (\n"abc"\n"def")\nnext': f"{PW} = [REDACTED]\n[REDACTED]\n[REDACTED]\nnext",
+            f'"{PW}":\n"Zq9vK2mX"': f'"{PW}":\n[REDACTED]',
+            f'"{PW}":\n"Zq9v:K2mX"': f'"{PW}":\n[REDACTED]',
+            f'"{PW}":\n"user": "bob"': f'"{PW}":\n"user": "bob"',
+            f"k:\n  {PW}: |\n    line1\n\n    Zq9vK2mX\nnext: 1": (
+                f"k:\n  {PW}: [REDACTED]\n    [REDACTED]\n\n    [REDACTED]\nnext: 1"
+            ),
+            f'{PW} = """abc\nZq9vK2mX\n"""\nx': f"{PW} = [REDACTED]\n[REDACTED]\n[REDACTED]\nx",
+            f'{PW} = f"""\nZq9vK2mX\n"""': f"{PW} = [REDACTED]\n[REDACTED]\n[REDACTED]",
+            f'{PW} = """  # c\nZq9vK2mX\n"""': f"{PW} = [REDACTED]\n[REDACTED]\n[REDACTED]",
+            f"{PW} = \\\n  Zq9vK2mX\nx": f"{PW} = [REDACTED]\n  [REDACTED]\nx",
+            f"{PW}: null\n  Zq9vK2mX": f"{PW}: [REDACTED]\n  [REDACTED]",
+            f"    {PW}:\n\tZq9vK2mX": f"    {PW}:\n\t[REDACTED]",
+            f"f({PW}=x,\n  other=1)\n": f"f({PW}=[REDACTED]\n  [REDACTED]\n",
             "foo:\n  token: None\n": "foo:\n  token: None\n",
         }
         for text, expected in cases.items():
@@ -373,12 +387,38 @@ class TestSecrets(unittest.TestCase):
                     handoff_tool.redact(text, handoff_tool.find_secrets(text)), expected
                 )
 
+    def test_key_forms(self):
+        cases = {
+            f'config["{PW}"] = "Zq9vK2mX"': f'config["{PW}"] = [REDACTED]',
+            "os.environ['API_TOKEN'] = " + "'Zq9vK2mX'": "os.environ['API_TOKEN'] = [REDACTED]",
+            f'{{\\"{PW}\\":\\"Zq9vK2mX\\"}}': f'{{\\"{PW}\\":[REDACTED]',
+            "X-API-Key: " + "Zq9vK2mX": "X-API-Key: [REDACTED]",
+            "Authorization: Bearer " + "Zq9vK2mX": "Authorization: [REDACTED]",
+            f"{PW.upper()}=Zq9vK2mX": f"{PW.upper()}=[REDACTED]",
+            f"--{PW}=Zq9vK2mX": f"--{PW}=[REDACTED]",
+        }
+        for text, expected in cases.items():
+            with self.subTest(text=text):
+                self.assertEqual(
+                    handoff_tool.redact(text, handoff_tool.find_secrets(text)), expected
+                )
+
+    def test_context_that_is_not_a_value_is_kept(self):
+        for text in (
+            "Fixed crash at src/auth/token.ts:42 by adding a null check",
+            "- token: decide the rotation policy\n  1. read docs/rotation.md\n",
+        ):
+            with self.subTest(text=text):
+                masked = handoff_tool.redact(text, handoff_tool.find_secrets(text))
+                self.assertIn(text.splitlines()[-1].strip(), masked)
+
     def test_url_credentials(self):
         cases = {
             "postgres://u:" + "hunter2)@db": "postgres://u:[REDACTED]@db",
             "redis://:" + "Zq9vK2mX@localhost:6379": "redis://:[REDACTED]@localhost:6379",
             "postgres://u:ab@" + "Zq9vK2mX@db": "postgres://u:[REDACTED]@db",
             "https://host:8080/users/@me": "https://host:8080/users/@me",
+            "HTTPS://user:" + "Zq9vK2mX@host": "HTTPS://user:[REDACTED]@host",
         }
         for text, expected in cases.items():
             with self.subTest(text=text):
@@ -434,6 +474,8 @@ class TestSecrets(unittest.TestCase):
             "\n".join(f"(f({PW}=abc{i}) token=None (x" for i in range(20000)),
             "a." * 8000,
             "a" * 100000,
+            f"{PW}=" * 20000,
+            "[" + ",".join(f'{{"id":{i},"token":"abcdef0"}}' for i in range(12000)) + "]",
         )
         for text in cases:
             started = time.monotonic()
@@ -592,6 +634,14 @@ class TestPublishAndMark(TempDirTest):
         self.assertEqual(code, 1)
         self.assertIn("not valid UTF-8", err.getvalue())
         self.assertNotIn("Traceback", err.getvalue())
+
+    def test_republishing_still_warns_about_secrets(self):
+        text = handoff().replace("補足があれば書く。", "token ghp_" + "q" * 36)
+        self.publish(text)
+        code, out = self.publish(text)
+        self.assertEqual(code, 0)
+        self.assertIn("already published", out)
+        self.assertIn("possible secret", out)
 
     def test_republishing_keeps_the_import_status(self):
         self.publish(handoff())
