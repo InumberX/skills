@@ -8,7 +8,7 @@
     {
       "name": "inumberx-skills",
       "source": "./",
-      "description": "全スキルを一括導入する全部入りプラグイン(create-pr / create-skill / hand-off-context / review-pr / write-commit)。review-pr にはフレームワーク/プラットフォーム由来のセキュリティ観点も同梱する。個別に選びたい場合は各スキル名のプラグインを使う。",
+      "description": "全スキルを一括導入する全部入りプラグイン(create-pr / create-skill / hand-off-context / rename-or-delete / review-pr / write-commit)。review-pr にはフレームワーク/プラットフォーム由来のセキュリティ観点も同梱する。個別に選びたい場合は各スキル名のプラグインを使う。",
       "author": {
         "name": "InumberX"
       },
@@ -44,6 +44,16 @@
       },
       "category": "development",
       "tags": ["handoff", "context", "codex", "workflow"]
+    },
+    {
+      "name": "rename-or-delete",
+      "source": "./skills/rename-or-delete",
+      "description": "改名・削除の前にリポジトリ全体(テスト・E2E・ドキュメント・設定・文字列リテラル)から参照を洗い出し、変更後に残っていないことを検索件数で示す。参照 0 件のものだけを削除し、一括置換は引用符を含む変更行を目視する。",
+      "author": {
+        "name": "InumberX"
+      },
+      "category": "development",
+      "tags": ["refactoring", "rename", "cleanup", "workflow"]
     },
     {
       "name": "review-pr",
