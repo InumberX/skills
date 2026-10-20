@@ -15,11 +15,13 @@
 | 文字列リテラル | 動的 import のパス、`data-*` 属性、翻訳キー、ログのイベント名 |
 | スタイル | クラス名、カスタムプロパティ、アセットへの `url()` |
 
-除外してよいのは `node_modules`、ビルド出力、ロックファイル、生成されたコード（生成元を直すため）である。`.gitignore` 済みのものは `git grep` を使うと自然に外れる。
+除外してよいのは `node_modules`、ビルド出力、ロックファイル、生成されたコード（生成元を直すため）である。`git grep` を使うと、`.gitignore` 済みのものは自然に外れる。ただし、まだ `git add` していない新規ファイルも検索されない。作業中に追加したファイルがある場合は、`--untracked` を付けるか、下の `grep` を使う。
 
 ```bash
 git grep -n -- '<name>'
-# 追跡外のファイルも含めたい場合
+# 未追跡の新規ファイルも含める場合
+git grep -n --untracked -- '<name>'
+# .gitignore 済みのファイルも含めて探す場合
 grep -rn --exclude-dir=node_modules --exclude-dir=dist -- '<name>' .
 ```
 
