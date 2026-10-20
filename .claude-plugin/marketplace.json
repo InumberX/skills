@@ -8,7 +8,7 @@
     {
       "name": "inumberx-skills",
       "source": "./",
-      "description": "全スキルを一括導入する全部入りプラグイン(create-pr / create-skill / hand-off-context / rename-or-delete / review-pr / write-commit)。review-pr にはフレームワーク/プラットフォーム由来のセキュリティ観点も同梱する。個別に選びたい場合は各スキル名のプラグインを使う。",
+      "description": "全スキルを一括導入する全部入りプラグイン(create-pr / create-skill / hand-off-context / record-lesson / rename-or-delete / review-pr / write-commit)。review-pr にはフレームワーク/プラットフォーム由来のセキュリティ観点も同梱する。個別に選びたい場合は各スキル名のプラグインを使う。",
       "author": {
         "name": "InumberX"
       },
@@ -44,6 +44,16 @@
       },
       "category": "development",
       "tags": ["handoff", "context", "codex", "workflow"]
+    },
+    {
+      "name": "record-lesson",
+      "source": "./skills/record-lesson",
+      "description": "失敗や繰り返された指摘を「いつ・何をする・なぜ」がそろった短いルールに書き直し、次に読まれる場所(CLAUDE.md / .claude/skills / 共有スキル)へ置く。書く前に同じ趣旨の既存ルールを探し、見つかれば「守られなかった」として書き方や置き場所を直す。",
+      "author": {
+        "name": "InumberX"
+      },
+      "category": "development",
+      "tags": ["rules", "retrospective", "claude-md", "workflow"]
     },
     {
       "name": "rename-or-delete",
