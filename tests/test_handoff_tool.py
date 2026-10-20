@@ -21,8 +21,10 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 _SKILL = Path(__file__).resolve().parent.parent / "skills" / "hand-off-context"
 _SCRIPT = _SKILL / "scripts" / "handoff_tool.py"
@@ -35,6 +37,11 @@ sys.modules["handoff_tool"] = handoff_tool
 _spec.loader.exec_module(handoff_tool)
 
 HAS_GIT = shutil.which("git") is not None
+
+# The secret-detection tests need password-shaped strings. Building the key at
+# runtime keeps literal `password=...` assignments out of the source, so secret
+# scanners on this repository (GitGuardian) do not flag the fixtures.
+PW = "pass" + "word"
 
 
 def handoff(handoff_id="20261020T010000Z-aaaa", previous="null", kind='"handoff"'):
@@ -290,9 +297,9 @@ class TestSecrets(unittest.TestCase):
     def test_tokens_next_to_japanese_text(self):
         token = "ghp_" + "a" * 36
         self.assertEqual(self.kinds(f"トークンは{token}です"), ["github-token"])
-        text = "password=hunter2xyz。次に"
+        text = f"{PW}=hunter2xyz。次に"
         self.assertEqual(
-            handoff_tool.redact(text, handoff_tool.find_secrets(text)), "password=[REDACTED]。次に"
+            handoff_tool.redact(text, handoff_tool.find_secrets(text)), f"{PW}=[REDACTED]"
         )
 
     def test_overlap_reports_once(self):
@@ -309,6 +316,175 @@ class TestSecrets(unittest.TestCase):
         self.assertEqual(
             redacted, "STRIPE_SECRET_KEY=[REDACTED]\nurl postgres://user:[REDACTED]@db/x\n"
         )
+
+    def test_values_end_at_closing_brackets_and_backticks(self):
+        for text in (
+            "def f(token=None):",
+            "`token=None`",
+            "token=`None`",
+            "call(api_key=[REDACTED])",
+        ):
+            with self.subTest(text=text):
+                self.assertEqual(self.kinds(text), [])
+        self.assertEqual(self.kinds(f"f({PW}=hunter2xyz)"), ["secret-assignment"])
+
+    def test_the_rest_of_the_line_is_masked(self):
+        cases = {
+            f"{PW}=ab)cd1234": f"{PW}=[REDACTED]",
+            f"DB_{PW.upper()}=p`ss)word99": f"DB_{PW.upper()}=[REDACTED]",
+            f"f({PW}=hunter2xyz)": f"f({PW}=[REDACTED]",
+            f"`{PW}=hunter2xyz`": f"`{PW}=[REDACTED]",
+            f"（{PW}=hunter2xyz）": f"（{PW}=[REDACTED]",
+            f"{PW}=!!!!!!": f"{PW}=[REDACTED]",
+            f'{PW}="correct horse battery"': f"{PW}=[REDACTED]",
+            f'{PW}="ab\\"cd efgh"': f"{PW}=[REDACTED]",
+            f"{PW}: correct horse Zq9vK2mX": f"{PW}: [REDACTED]",
+            f"{PW}: None hunter2xyz": f"{PW}: [REDACTED]",
+            f"{PW} := 'Zq9vK2mX'": f"{PW} := [REDACTED]",
+            f"if {PW} == 'Zq9vK2mX':": f"if {PW} == [REDACTED]",
+            f"{PW} => 'Zq9vK2mX'": f"{PW} => [REDACTED]",
+            f"{PW}：Zq9vK2mX": f"{PW}：[REDACTED]",
+            "パスワード: " + "Zq9vK2mX": "パスワード: [REDACTED]",
+            "api_key=`" + "sk_live_abc`.": "api_key=[REDACTED]",
+            f"x\r\n{PW}=hunter2xyz\r\ny": f"x\r\n{PW}=[REDACTED]\r\ny",
+            "token=None, " + f"{PW}=hunter2xyz": "token=[REDACTED]",
+            "token: 1024 " + "tokens": "token: [REDACTED]",
+            "token: None # was " + "hunter2xyz": "token: [REDACTED]",
+        }
+        for text, expected in cases.items():
+            with self.subTest(text=text):
+                self.assertEqual(
+                    handoff_tool.redact(text, handoff_tool.find_secrets(text)), expected
+                )
+
+    def test_values_on_the_following_lines_are_masked(self):
+        cases = {
+            f"{PW}: |\n  Zq9vK2mX\nnext: 1": f"{PW}: [REDACTED]\n  [REDACTED]\nnext: 1",
+            f"{PW}: >-\n  Zq9vK2mX\n  more\n": f"{PW}: [REDACTED]\n  [REDACTED]\n  [REDACTED]\n",
+            f"{PW}:\n  Zq9vK2mX": f"{PW}:\n  [REDACTED]",
+            f"connect(\n {PW}=\n  'Zq9vK2mX')": f"connect(\n {PW}=\n  [REDACTED]",
+            f'{PW} = """\nZq9vK2mX\n"""\nx': f"{PW} = [REDACTED]\n[REDACTED]\n[REDACTED]\nx",
+            f"{PW}:\nnext: 1": f"{PW}:\nnext: 1",
+            f'{PW} = (\n"abc"\n"def")\nnext': f"{PW} = [REDACTED]\n[REDACTED]\n[REDACTED]\nnext",
+            f'"{PW}":\n"Zq9vK2mX"': f'"{PW}":\n[REDACTED]',
+            f'"{PW}":\n"Zq9v:K2mX"': f'"{PW}":\n[REDACTED]',
+            f'"{PW}":\n"user": "bob"': f'"{PW}":\n"user": "bob"',
+            f"k:\n  {PW}: |\n    line1\n\n    Zq9vK2mX\nnext: 1": (
+                f"k:\n  {PW}: [REDACTED]\n    [REDACTED]\n\n    [REDACTED]\nnext: 1"
+            ),
+            f'{PW} = """abc\nZq9vK2mX\n"""\nx': f"{PW} = [REDACTED]\n[REDACTED]\n[REDACTED]\nx",
+            f'{PW} = f"""\nZq9vK2mX\n"""': f"{PW} = [REDACTED]\n[REDACTED]\n[REDACTED]",
+            f'{PW} = """  # c\nZq9vK2mX\n"""': f"{PW} = [REDACTED]\n[REDACTED]\n[REDACTED]",
+            f"{PW} = \\\n  Zq9vK2mX\nx": f"{PW} = [REDACTED]\n  [REDACTED]\nx",
+            f"{PW}: null\n  Zq9vK2mX": f"{PW}: [REDACTED]\n  [REDACTED]",
+            f"    {PW}:\n\tZq9vK2mX": f"    {PW}:\n\t[REDACTED]",
+            f"f({PW}=x,\n  other=1)\n": f"f({PW}=[REDACTED]\n  [REDACTED]\n",
+            "foo:\n  token: None\n": "foo:\n  token: None\n",
+        }
+        for text, expected in cases.items():
+            with self.subTest(text=text):
+                self.assertEqual(
+                    handoff_tool.redact(text, handoff_tool.find_secrets(text)), expected
+                )
+
+    def test_key_forms(self):
+        cases = {
+            f'config["{PW}"] = "Zq9vK2mX"': f'config["{PW}"] = [REDACTED]',
+            "os.environ['API_TOKEN'] = " + "'Zq9vK2mX'": "os.environ['API_TOKEN'] = [REDACTED]",
+            f'{{\\"{PW}\\":\\"Zq9vK2mX\\"}}': f'{{\\"{PW}\\":[REDACTED]',
+            "X-API-Key: " + "Zq9vK2mX": "X-API-Key: [REDACTED]",
+            "Authorization: Bearer " + "Zq9vK2mX": "Authorization: [REDACTED]",
+            f"{PW.upper()}=Zq9vK2mX": f"{PW.upper()}=[REDACTED]",
+            f"--{PW}=Zq9vK2mX": f"--{PW}=[REDACTED]",
+        }
+        for text, expected in cases.items():
+            with self.subTest(text=text):
+                self.assertEqual(
+                    handoff_tool.redact(text, handoff_tool.find_secrets(text)), expected
+                )
+
+    def test_context_that_is_not_a_value_is_kept(self):
+        for text in (
+            "Fixed crash at src/auth/token.ts:42 by adding a null check",
+            "- token: decide the rotation policy\n  1. read docs/rotation.md\n",
+        ):
+            with self.subTest(text=text):
+                masked = handoff_tool.redact(text, handoff_tool.find_secrets(text))
+                self.assertIn(text.splitlines()[-1].strip(), masked)
+
+    def test_url_credentials(self):
+        cases = {
+            "postgres://u:" + "hunter2)@db": "postgres://u:[REDACTED]@db",
+            "redis://:" + "Zq9vK2mX@localhost:6379": "redis://:[REDACTED]@localhost:6379",
+            "postgres://u:ab@" + "Zq9vK2mX@db": "postgres://u:[REDACTED]@db",
+            "https://host:8080/users/@me": "https://host:8080/users/@me",
+            "HTTPS://user:" + "Zq9vK2mX@host": "HTTPS://user:[REDACTED]@host",
+        }
+        for text, expected in cases.items():
+            with self.subTest(text=text):
+                self.assertEqual(
+                    handoff_tool.redact(text, handoff_tool.find_secrets(text)), expected
+                )
+
+    def test_closers_and_punctuation_around_placeholders(self):
+        for text in (
+            "def f(token=None):",
+            "（token=None）",
+            "token=`None`.",
+            "f(token=None).",
+            "foo(\n    token=None)",
+            "token=None,",
+            'token: ""',
+        ):
+            with self.subTest(text=text):
+                self.assertEqual(self.kinds(text), [])
+
+    def test_placeholder_look_alikes_are_detected(self):
+        for value in (
+            "$WeePW123",
+            "<@|zy^>",
+            "os.environXsecret",
+            "<yUeMrbIP>",
+            "${Zq9vK2mX}",
+            "env.Zq9vK2mX",
+        ):
+            with self.subTest(value=value):
+                self.assertEqual(self.kinds(f"{PW}={value}"), ["secret-assignment"])
+
+    def test_environment_references_are_placeholders(self):
+        for value in (
+            "$GITHUB_TOKEN",
+            "${TOKEN}",
+            '"${TOKEN}"',
+            "${token}",
+            "<your-token>",
+            "<API_KEY>",
+            "os.environ['X']",
+            "os.environ.get('X')",
+            "env.TOKEN",
+            "なし",
+        ):
+            with self.subTest(value=value):
+                self.assertEqual(self.kinds(f"API_TOKEN={value}"), [])
+
+    def test_large_inputs_stay_linear(self):
+        """A quadratic scan takes tens of seconds here; linear code takes well under one."""
+        cases = (
+            "f(token=None) " * 20000,
+            "\n".join(f"(f({PW}=abc{i}) token=None (x" for i in range(20000)),
+            "a." * 8000,
+            "a" * 100000,
+            f"{PW}=" * 20000,
+            "[" + ",".join(f'{{"id":{i},"token":"abcdef0"}}' for i in range(12000)) + "]",
+        )
+        for text in cases:
+            started = time.monotonic()
+            findings = handoff_tool.find_secrets(text)
+            handoff_tool.redact(text, findings)
+            sections = handoff_tool.SectionIndex(text)
+            for finding in findings:
+                sections.title(finding.start)
+            self.assertLess(time.monotonic() - started, 5)
 
     def test_token_counts_are_ignored(self):
         self.assertEqual(self.kinds("max_tokens: 1024\nTOKEN_LIMIT=4096\ntoken_ratio: 0.5\n"), [])
@@ -351,6 +527,26 @@ class TestScanCommand(TempDirTest):
         path.write_bytes(b"x\r\npassword=hunter2xyz\r\n")
         run("scan", str(path), "--redact")
         self.assertEqual(path.read_bytes(), b"x\r\npassword=[REDACTED]\r\n")
+
+    @unittest.skipIf(os.name == "nt", "POSIX permission bits")
+    def test_new_files_follow_umask(self):
+        previous = os.umask(0o022)
+        try:
+            handoff_tool.atomic_write(self.root / "new.md", "x\n")
+        finally:
+            os.umask(previous)
+        self.assertEqual((self.root / "new.md").stat().st_mode & 0o777, 0o644)
+        previous = os.umask(0o077)
+        try:
+            handoff_tool.atomic_write(self.root / "private.md", "x\n")
+        finally:
+            os.umask(previous)
+        self.assertEqual((self.root / "private.md").stat().st_mode & 0o777, 0o600)
+
+    def test_chmod_failure_does_not_fail_the_write(self):
+        with mock.patch.object(handoff_tool.os, "chmod", side_effect=PermissionError("no")):
+            handoff_tool.atomic_write(self.root / "share.md", "x\n")
+        self.assertEqual((self.root / "share.md").read_text(), "x\n")
 
     @unittest.skipIf(os.name == "nt", "POSIX permission bits")
     def test_redact_keeps_permissions(self):
@@ -405,9 +601,93 @@ class TestPublishAndMark(TempDirTest):
         self.assertEqual((self.handoff_dir / "handoff.md").read_text(), before)
         self.assertFalse((self.handoff_dir / "history").exists())
 
-    def test_reused_id_is_refused(self):
+    def test_reused_id_with_different_content_is_refused(self):
         self.publish(handoff())
-        self.assertEqual(self.publish(handoff())[0], 1)
+        changed = handoff().replace("補足があれば書く。", "別の内容")
+        self.assertEqual(self.publish(changed)[0], 1)
+
+    def test_republishing_the_same_draft_changes_nothing(self):
+        self.publish(handoff())
+        before = (self.handoff_dir / "metadata.json").read_text()
+        code, out = self.publish(handoff())
+        self.assertEqual(code, 0)
+        self.assertIn("already published", out)
+        self.assertEqual((self.handoff_dir / "metadata.json").read_text(), before)
+        self.assertFalse((self.handoff_dir / "history").exists())
+
+    def test_republishing_removes_the_draft_and_restores_gitignore(self):
+        self.publish(handoff())
+        (self.handoff_dir / ".gitignore").unlink()
+        code, out = self.publish(handoff())
+        self.assertEqual(code, 0)
+        self.assertIn("already published", out)
+        self.assertFalse((self.handoff_dir / "draft.md").exists())
+        self.assertEqual((self.handoff_dir / ".gitignore").read_text(), "*\n")
+
+    def test_undecodable_handoff_is_reported_without_traceback(self):
+        self.handoff_dir.mkdir()
+        (self.handoff_dir / "handoff.md").write_bytes(b"\xff\xfe broken")
+        draft = self.write("d.md", handoff())
+        err = io.StringIO()
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
+            code = handoff_tool.main(["publish", str(draft), "--root", str(self.root)])
+        self.assertEqual(code, 1)
+        self.assertIn("not valid UTF-8", err.getvalue())
+        self.assertNotIn("Traceback", err.getvalue())
+
+    def test_republishing_still_warns_about_secrets(self):
+        text = handoff().replace("補足があれば書く。", "token ghp_" + "q" * 36)
+        self.publish(text)
+        code, out = self.publish(text)
+        self.assertEqual(code, 0)
+        self.assertIn("already published", out)
+        self.assertIn("possible secret", out)
+
+    def test_republishing_keeps_the_import_status(self):
+        self.publish(handoff())
+        run("mark", "--status", "imported", "--agent", "codex", "--root", str(self.root))
+        self.publish(handoff())
+        metadata = json.loads((self.handoff_dir / "metadata.json").read_text())
+        self.assertEqual(metadata["status"], "imported")
+        self.assertEqual(metadata["imported_by"], "codex")
+
+    def failing_replace(self, name):
+        """os.replace that fails when the target is `name`, like a full disk."""
+        real = os.replace
+
+        def replace(src, dst):
+            if Path(dst).name == name:
+                raise PermissionError(13, "Permission denied")
+            return real(src, dst)
+
+        return mock.patch.object(handoff_tool.os, "replace", side_effect=replace)
+
+    def test_retry_after_failing_on_handoff_md(self):
+        self.publish(handoff())
+        second = handoff("20261020T020000Z-bbbb", previous='"20261020T010000Z-aaaa"')
+        with self.failing_replace("handoff.md"):
+            code, out = self.publish(second)
+        self.assertEqual(code, 1)
+        self.assertIn("archived the previous handoff", out)
+        code, out = self.publish(second)
+        self.assertEqual(code, 0, out)
+        self.assertIn("already archived", out)
+        self.assertIn("20261020T020000Z-bbbb", (self.handoff_dir / "handoff.md").read_text())
+
+    def test_retry_after_failing_on_metadata(self):
+        self.publish(handoff())
+        second = handoff("20261020T020000Z-bbbb", previous='"20261020T010000Z-aaaa"')
+        second = second.replace("補足があれば書く。", "token ghp_" + "q" * 36)
+        with self.failing_replace("metadata.json"):
+            code, out = self.publish(second)
+        self.assertEqual(code, 1)
+        self.assertIn("wrote .handoff/handoff.md", out)
+        code, out = self.publish(second)
+        self.assertEqual(code, 0, out)
+        self.assertIn("finished publishing", out)
+        self.assertIn("possible secret", out)
+        metadata = json.loads((self.handoff_dir / "metadata.json").read_text())
+        self.assertEqual(metadata["handoff_id"], "20261020T020000Z-bbbb")
 
     def test_existing_archive_is_not_overwritten(self):
         self.publish(handoff())
@@ -448,6 +728,23 @@ class TestPublishAndMark(TempDirTest):
         self.assertEqual(metadata["status"], "imported")
         self.assertEqual(metadata["imported_by"], "codex")
         self.assertRegex(metadata["imported_at"], handoff_tool.ISO_8601)
+
+    @unittest.skipIf(os.name == "nt" or os.geteuid() == 0, "needs a non-root POSIX user")
+    def test_unwritable_directory_is_reported_without_traceback(self):
+        self.publish(handoff())
+        before = (self.handoff_dir / "handoff.md").read_text()
+        self.handoff_dir.chmod(0o555)
+        try:
+            draft = self.write("draft2.md", handoff("20261020T020000Z-bbbb"))
+            err = io.StringIO()
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
+                code = handoff_tool.main(["publish", str(draft), "--root", str(self.root)])
+        finally:
+            self.handoff_dir.chmod(0o755)
+        self.assertEqual(code, 1)
+        self.assertIn("error:", err.getvalue())
+        self.assertNotIn("Traceback", err.getvalue())
+        self.assertEqual((self.handoff_dir / "handoff.md").read_text(), before)
 
     def test_mark_without_handoff_changes_nothing(self):
         code, _out = run("mark", "--status", "invalid", "--root", str(self.root))
@@ -499,6 +796,47 @@ class TestClearCommand(TempDirTest):
         self.assertFalse((self.handoff_dir / "handoff.md").exists())
         self.assertEqual(len(list((self.handoff_dir / "history").iterdir())), 3)
         self.assertTrue((self.root / "src" / "keep.txt").exists())
+
+    def test_each_deleted_file_is_reported(self):
+        _code, out = run("clear", "--yes", "--root", str(self.root))
+        self.assertIn("deleted .handoff/handoff.md", out)
+        self.assertIn("deleted .handoff/metadata.json", out)
+        self.assertNotIn("would delete", out)
+
+    @unittest.skipIf(os.name == "nt" or os.geteuid() == 0, "needs a non-root POSIX user")
+    def test_failure_part_way_reports_only_what_was_deleted(self):
+        history = self.handoff_dir / "history"
+        history.chmod(0o555)
+        try:
+            out, err = io.StringIO(), io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                code = handoff_tool.main(["clear", "--history", "--yes", "--root", str(self.root)])
+        finally:
+            history.chmod(0o755)
+        self.assertEqual(code, 1)
+        self.assertIn("deleted .handoff/handoff.md", out.getvalue())
+        self.assertNotIn("history/", out.getvalue())
+        self.assertIn("stopped here", err.getvalue())
+
+    def test_failure_part_way_is_reported_as_root_too(self):
+        real = Path.unlink
+
+        def unlink(path, *args, **kwargs):
+            if path.parent.name == "history":
+                raise PermissionError(13, "Permission denied")
+            return real(path, *args, **kwargs)
+
+        out, err = io.StringIO(), io.StringIO()
+        with (
+            mock.patch.object(Path, "unlink", unlink),
+            contextlib.redirect_stdout(out),
+            contextlib.redirect_stderr(err),
+        ):
+            code = handoff_tool.main(["clear", "--history", "--yes", "--root", str(self.root)])
+        self.assertEqual(code, 1)
+        self.assertIn("deleted .handoff/handoff.md", out.getvalue())
+        self.assertNotIn("history/", out.getvalue())
+        self.assertIn("stopped here", err.getvalue())
 
     def test_keep_prunes_oldest_by_id(self):
         run("clear", "--keep", "1", "--yes", "--root", str(self.root))
