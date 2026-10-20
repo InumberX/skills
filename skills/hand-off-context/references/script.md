@@ -50,7 +50,7 @@ python3 <このスキルのディレクトリ>/scripts/handoff_tool.py <サブ�
 | 出力 | 原因と対処 |
 | --- | --- |
 | `the draft is not a valid Handoff File` | 下書きの frontmatter が不正。続けて出る `ERROR` を直す |
-| `the draft reuses the current handoff_id` | 下書きの `handoff_id` が現在の引き継ぎと同じで、内容が違う。`info` で新しい値を取り直す（内容まで同じなら拒否せず、途中で止まった publish の続きとして完了する） |
+| `the draft reuses the current handoff_id` | 下書きの `handoff_id` が現在の引き継ぎと同じで、内容が違う。`info` で新しい値を取り直す（内容まで同じ場合は次節） |
 | `handoff_id ... is not YYYYMMDDTHHMMSSZ-xxxx` | 下書きの `handoff_id` の形式が違う。履歴のファイル名に使うため、`validate` と違って警告ではなく拒否する。`info` で新しい値を取り直す |
 | `... already exists` | 退避先の履歴ファイルがすでにあり、退避しようとしている内容と違う。上書きせずユーザーに伝える（次節） |
 
@@ -59,7 +59,8 @@ python3 <このスキルのディレクトリ>/scripts/handoff_tool.py <サブ�
 `publish` が途中で失敗したとき（ディスクの空き不足など）は、原因を取り除いて同じコマンドを再実行すればよい。どこまで進んだかは、失敗の前に出力された `wrote` / `archived` の行で分かる。
 
 - 履歴への退避の後で失敗した場合：退避先のファイルが現在の `handoff.md` と同じ内容なら、それを使って続ける（`already exists` では拒否しない）
-- `handoff.md` を置き換えた後で失敗した場合：下書きと `handoff.md` が同じ内容なら、`metadata.json` の書き込みから続ける
+- `handoff.md` を置き換えた後で失敗した場合：下書きと `handoff.md` が同じ内容で、`metadata.json` がまだこの引き継ぎのものになっていなければ、`metadata.json` の書き込みから続ける
+- すでに最後まで公開済みの場合（`metadata.json` もこの引き継ぎのもの）：`already published` と出力し、何も変更せずに終了コード 0 で終わる。import 後の `imported` などの状態は書き換えない
 
 `already exists` で拒否されるのは、退避先に**別の内容**の履歴ファイルがあるときだけである。その場合は、どちらを残すかをユーザーに尋ねる。
 

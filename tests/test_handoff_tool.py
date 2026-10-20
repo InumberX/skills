@@ -343,6 +343,17 @@ class TestSecrets(unittest.TestCase):
             f"{PW}=`correct horse battery`": f"{PW}=`[REDACTED]`",
             "api_key=`" + "sk_live_abc`.": "api_key=`[REDACTED]`.",
             "postgres://u:" + "hunter2)@db": "postgres://u:[REDACTED]@db",
+            f'{PW}="ab\\"cd efgh"': f'{PW}="[REDACTED]"',
+            f'{PW}="correct horse battery': f'{PW}="[REDACTED]',
+            f'{PW}=" leading secret"': f'{PW}="[REDACTED]"',
+            f"{PW}=it'sSecretXyz": f"{PW}=[REDACTED]",
+            f'{PW}=abc"defghi,more': f"{PW}=[REDACTED]",
+            f"f({PW}=Pa55word))": f"f({PW}=[REDACTED])",
+            f"(f({PW}=x(y)))": f"(f({PW}=[REDACTED]))",
+            f"x\r\n{PW}=hunter2xyz\r\n": f"x\r\n{PW}=[REDACTED]\r\n",
+            f'{PW}="abc"def-ghi': f'{PW}="[REDACTED]',
+            f'{{"{PW}": "abc def", "x": 1}}': f'{{"{PW}": "[REDACTED]", "x": 1}}',
+            f'{PW}="abc def".': f'{PW}="[REDACTED]".',
         }
         for text, expected in cases.items():
             with self.subTest(text=text):
@@ -351,9 +362,27 @@ class TestSecrets(unittest.TestCase):
                 )
 
     def test_closers_and_punctuation_around_placeholders(self):
-        for text in ("def f(token=None):", "（token=None）", "token=`None`.", "f(token=None)."):
+        for text in (
+            "def f(token=None):",
+            "（token=None）",
+            "token=`None`.",
+            "f(token=None).",
+            "foo(\n    token=None)",
+            "token=None,",
+            'token: ""',
+        ):
             with self.subTest(text=text):
                 self.assertEqual(self.kinds(text), [])
+
+    def test_placeholder_look_alikes_are_detected(self):
+        for value in ("$WeePW123", "<@|zy^>", "os.environXsecret"):
+            with self.subTest(value=value):
+                self.assertEqual(self.kinds(f"{PW}={value}"), ["secret-assignment"])
+
+    def test_environment_references_are_placeholders(self):
+        for value in ("$GITHUB_TOKEN", "os.environ['X']", "os.environ.get('X')", "env.TOKEN"):
+            with self.subTest(value=value):
+                self.assertEqual(self.kinds(f"API_TOKEN={value}"), [])
 
     def test_token_counts_are_ignored(self):
         self.assertEqual(self.kinds("max_tokens: 1024\nTOKEN_LIMIT=4096\ntoken_ratio: 0.5\n"), [])
@@ -475,12 +504,22 @@ class TestPublishAndMark(TempDirTest):
         changed = handoff().replace("補足があれば書く。", "別の内容")
         self.assertEqual(self.publish(changed)[0], 1)
 
-    def test_republishing_the_same_draft_is_harmless(self):
+    def test_republishing_the_same_draft_changes_nothing(self):
         self.publish(handoff())
+        before = (self.handoff_dir / "metadata.json").read_text()
         code, out = self.publish(handoff())
         self.assertEqual(code, 0)
-        self.assertIn("finished publishing", out)
+        self.assertIn("already published", out)
+        self.assertEqual((self.handoff_dir / "metadata.json").read_text(), before)
         self.assertFalse((self.handoff_dir / "history").exists())
+
+    def test_republishing_keeps_the_import_status(self):
+        self.publish(handoff())
+        run("mark", "--status", "imported", "--agent", "codex", "--root", str(self.root))
+        self.publish(handoff())
+        metadata = json.loads((self.handoff_dir / "metadata.json").read_text())
+        self.assertEqual(metadata["status"], "imported")
+        self.assertEqual(metadata["imported_by"], "codex")
 
     def failing_replace(self, name):
         """os.replace that fails when the target is `name`, like a full disk."""
@@ -508,12 +547,15 @@ class TestPublishAndMark(TempDirTest):
     def test_retry_after_failing_on_metadata(self):
         self.publish(handoff())
         second = handoff("20261020T020000Z-bbbb", previous='"20261020T010000Z-aaaa"')
+        second = second.replace("補足があれば書く。", "token ghp_" + "q" * 36)
         with self.failing_replace("metadata.json"):
             code, out = self.publish(second)
         self.assertEqual(code, 1)
         self.assertIn("wrote .handoff/handoff.md", out)
         code, out = self.publish(second)
         self.assertEqual(code, 0, out)
+        self.assertIn("finished publishing", out)
+        self.assertIn("possible secret", out)
         metadata = json.loads((self.handoff_dir / "metadata.json").read_text())
         self.assertEqual(metadata["handoff_id"], "20261020T020000Z-bbbb")
 

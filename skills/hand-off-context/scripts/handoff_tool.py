@@ -103,15 +103,19 @@ SECRET_PATTERNS: tuple[tuple[str, str], ...] = (
 SECRET_ASSIGNMENT = (
     "secret-assignment",
     r"(?i)\b(?P<key>[\w.-]*(?:password|passwd|secret|token|api_key|apikey|private_key|credential)"
-    r"[\w.-]*)[\"']?[ \t]*[:=][ \t]*(?P<quote>[\"'`]?)(?P<value>[^\s\"',;\u3000、。]+)",
+    r"[\w.-]*)[\"']?[ \t]*[:=][ \t]*(?=[^\s\u3000、。])",
 )
 PRIVATE_KEY_BLOCK = re.compile(
     r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?(?:-----END [A-Z ]*PRIVATE KEY-----|\Z)", re.S
 )
 # Values that are clearly not secrets: placeholders, references to the
 # environment, and values already masked.
+# Each form is kept narrow: a real secret that happens to look like a
+# placeholder is written out, so `$WeePW...` (mixed case) or `<@|zy^>` must
+# not pass as `$TOKEN` or `<your-token>`.
 PLACEHOLDER = re.compile(
-    r"^(?:x+|\*+|\.{3}|<[^>]*>|\$\{?\w+\}?|process\.env\.\w+|os\.environ\S*|env\.\w+"
+    r"^(?:x+|\*+|\.{3}|<[a-z][a-z0-9 _-]*>|\$\{[a-z_]\w*\}|(?-i:\$[A-Z_][A-Z0-9_]*)"
+    r"|process\.env\.\w+|os\.environ(?:\[[^\]]+\]|\.get\([^)]*\))?|env\.\w+"
     r"|\[REDACTED\]|none|null|unknown|true|false|undefined)$",
     re.I,
 )
@@ -523,56 +527,100 @@ def is_token_count(match: re.Match[str], value: str) -> bool:
     return words == {"token"}
 
 
-SENTENCE_PUNCTUATION = ":.!?"
-# Closing characters that may belong to code around an assignment, with the
-# opener that must appear before the key for them to count as such.
+# Ignored when deciding whether a value is a placeholder ("token=None,"), but
+# kept inside the masked span.
+SENTENCE_PUNCTUATION = ":.!?,;"
+QUOTES = "\"'`"
+# Characters that may follow a closing quote without being part of the value
+# (`"x", ...`, `{"k": "x"}`, `f("x").`).
+QUOTED_VALUE_FOLLOWERS = ",;:.!?)]}\uff09"
+# Characters that end an unquoted value: whitespace and Japanese punctuation.
+VALUE_TERMINATORS = "\u3000、。"
+# Closing characters that may belong to code around an assignment, with their
+# openers.
 CODE_CLOSERS = {")": "(", "\uff09": "\uff08", "`": "`"}
 
 
 def assignment_span(text: str, match: re.Match[str]) -> tuple[int, int, str]:
-    """(start, end, bare) of the value in a `key=value` match.
+    """(start, end, bare) of the value after a `key=` / `key:` match.
 
     start/end is the span to mask; bare is the value without trailing sentence
     punctuation or code closers, used to decide whether it is a placeholder.
+    Where the end of the value is uncertain the span errs long: masking too
+    much hides some text, masking too little writes part of a secret out.
 
-    - A quoted value (`"a b"`, `` `a b` ``) runs to its closing quote, spaces
-      included, so `password="correct horse"` is masked whole.
-    - A trailing ")" or backtick is dropped only when its opener appears before
-      the key on the same line (`f(token=x)`, `` `token=x` ``). A value that
-      itself ends in ")" (`Pa55word)`) is masked whole.
-    - Sentence punctuation stays inside the masked span (one character too many
-      leaks nothing) unless it follows such a closer (`f(token=x).`).
+    - A quoted value runs to the closing quote, skipping backslash-escaped
+      quotes. Without a closing quote it runs to the end of the line.
+    - An unquoted value runs to whitespace, so quotes, commas and brackets
+      inside it (`it'sSecret`, `ab)cd`) are masked with the rest.
+    - Trailing ")" / "）" are left outside only as many times as an opener is
+      still open before the key in the same paragraph (`f(token=x)`), and a
+      trailing backtick only when a code span is open on the line
+      (`` `token=x` ``). Sentence punctuation after such a closer is left
+      outside too (`f(password=x).`).
     """
-    start = match.start("value")
+    start = match.end()
     line_start = text.rfind("\n", 0, match.start()) + 1
     line_end = text.find("\n", start)
     line_end = len(text) if line_end == -1 else line_end
-    quote = match.group("quote")
-    if quote:
-        close = text.find(quote, start, line_end)
-        if close != -1:
-            return start, close, text[start:close]
+    if text[line_end - 1 : line_end] == "\r":
+        line_end -= 1
 
-    end = match.end("value")
-    prefix = text[line_start : match.start("key")]
+    quote = text[start]
+    if quote in QUOTES:
+        i = start + 1
+        while i < line_end:
+            if text[i] == "\\":
+                i += 2
+                continue
+            if text[i] == quote:
+                # `"abc"def`: text glued to the closing quote is still part of
+                # the value. Stop only where the quote is followed by
+                # punctuation that ends the value, then whitespace or end of line.
+                k = i + 1
+                while k < line_end and text[k] in QUOTED_VALUE_FOLLOWERS:
+                    k += 1
+                if k == line_end or text[k].isspace() or text[k] in VALUE_TERMINATORS:
+                    return start + 1, i, text[start + 1 : i]
+                end = k
+                while (
+                    end < line_end
+                    and not text[end].isspace()
+                    and text[end] not in VALUE_TERMINATORS
+                ):
+                    end += 1
+                return start + 1, end, text[start + 1 : end]
+            i += 1
+        return start + 1, line_end, text[start + 1 : line_end]
+
+    end = start
+    while end < line_end and not text[end].isspace() and text[end] not in VALUE_TERMINATORS:
+        end += 1
     core = end
     while core > start and text[core - 1] in SENTENCE_PUNCTUATION:
         core -= 1
+
+    paragraph_start = text.rfind("\n\n", 0, match.start()) + 1
+    prefix = text[paragraph_start : match.start("key")]
+    line_prefix = text[line_start : match.start("key")]
+    open_count = {
+        closer: (
+            line_prefix.count("`") % 2
+            if closer == "`"
+            else prefix.count(opener) - prefix.count(closer)
+        )
+        for closer, opener in CODE_CLOSERS.items()
+    }
     stripped = core
     while stripped > start:
         closer = text[stripped - 1]
-        opener = CODE_CLOSERS.get(closer)
-        if opener is None:
+        if open_count.get(closer, 0) <= 0:
             break
         value = text[start:stripped]
-        if closer == "`":
-            belongs_to_code = prefix.count("`") % 2 == 1
-        else:
-            belongs_to_code = prefix.count(opener) > prefix.count(closer) and value.count(
-                closer
-            ) > value.count(opener)
-        if not belongs_to_code:
+        opener = CODE_CLOSERS[closer]
+        if closer != "`" and value.count(closer) <= value.count(opener):
             break
+        open_count[closer] -= 1
         stripped -= 1
     # A value made only of punctuation ("!!!!!!") is still a value.
     bare = text[start:stripped] or text[start:end]
@@ -589,7 +637,7 @@ def find_secrets(text: str) -> list[Finding]:
         for match in re.finditer(pattern, text, re.ASCII):
             if kind == "secret-assignment":
                 start, end, bare = assignment_span(text, match)
-                if PLACEHOLDER.match(bare) or is_token_count(match, bare):
+                if not bare or PLACEHOLDER.match(bare) or is_token_count(match, bare):
                     continue
             elif "value" in match.re.groupindex:
                 if PLACEHOLDER.match(match.group("value")):
@@ -601,11 +649,13 @@ def find_secrets(text: str) -> list[Finding]:
             else:
                 start, end = match.span()
             spans.append(Finding(kind, text.count("\n", 0, start) + 1, start, end))
-    # Keep the first, widest match where patterns overlap (sk-ant- is also sk-).
+    # Merge overlapping spans instead of dropping one, so the tail of a wider
+    # finding that starts later is still masked.
     spans.sort(key=lambda f: (f.start, -(f.end - f.start)))
     findings: list[Finding] = []
     for finding in spans:
         if findings and finding.start < findings[-1].end:
+            findings[-1].end = max(findings[-1].end, finding.end)
             continue
         findings.append(finding)
     return findings
@@ -739,6 +789,14 @@ def cmd_publish(args: argparse.Namespace) -> int:
         print("refused: the draft is not a valid Handoff File; nothing was changed")
         return 1
 
+    draft_text = read_text(draft)
+    for finding in find_secrets(draft_text):
+        # A safety net for a skipped `scan`; not a refusal, since some findings are false positives.
+        report.warnings.append(
+            f"possible secret on line {finding.line} [{section_of(draft_text, finding.start)}]:"
+            f" {finding.kind}; run `scan` to review it"
+        )
+
     new_id = str(data["handoff_id"])
     # The id becomes a file name under history/; anything but the documented
     # shape could point outside it (e.g. "../../x").
@@ -755,12 +813,22 @@ def cmd_publish(args: argparse.Namespace) -> int:
         old = parse_frontmatter(split[0], Report()) if split else {}
         old_id = old.get("handoff_id")
         if old_id == new_id:
-            if current_text == read_text(draft):
-                # An earlier publish replaced handoff.md and then failed (e.g. on
-                # metadata.json). Finish it instead of refusing for good.
-                return finish_publish(root, handoff_dir, draft, new_id, resumed=True)
-            print(f"refused: the draft reuses the current handoff_id {new_id}; nothing was changed")
-            return 1
+            if current_text != draft_text:
+                print(
+                    f"refused: the draft reuses the current handoff_id {new_id};"
+                    " nothing was changed"
+                )
+                return 1
+            metadata, problem = load_metadata(handoff_dir / METADATA_FILE)
+            if problem is None and metadata and metadata.get("handoff_id") == new_id:
+                # Already published, and possibly imported since: re-running must
+                # not reset the status recorded by `mark`.
+                print(f"already published {new_id}; nothing was changed")
+                return 0
+            # An earlier publish replaced handoff.md and then failed before
+            # metadata.json. Finish it instead of refusing for good.
+            print_report(report)
+            return finish_publish(root, handoff_dir, draft, new_id, resumed=True)
         if isinstance(old_id, str) and HANDOFF_ID.match(old_id):
             name = f"{old_id}.md"
             if data.get("previous_handoff_id") != old_id:
@@ -779,14 +847,6 @@ def cmd_publish(args: argparse.Namespace) -> int:
             else:
                 print(f"refused: {archive} already exists; nothing was changed")
                 return 1
-
-    draft_text = read_text(draft)
-    for finding in find_secrets(draft_text):
-        # A safety net for a skipped `scan`; not a refusal, since some findings are false positives.
-        report.warnings.append(
-            f"possible secret on line {finding.line} [{section_of(draft_text, finding.start)}]:"
-            f" {finding.kind}; run `scan` to review it"
-        )
 
     print_report(report)
     # Each completed write is printed, so a failure part-way says exactly how far

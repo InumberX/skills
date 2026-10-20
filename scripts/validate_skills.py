@@ -78,18 +78,22 @@ def check(skill_md: Path) -> list[str]:
     description = data.get("description")
     if not isinstance(description, str) or not description.strip():
         errors.append("`description` is missing or empty")
-    elif len(description) > MAX_DESCRIPTION_LENGTH:
-        errors.append(
-            f"`description` is {len(description)} characters; the limit is {MAX_DESCRIPTION_LENGTH}"
-        )
-    elif description_scalar_style(front) != '"':
-        # format.md: the description value must be a double-quoted YAML scalar.
-        # Checked via the parsed scalar *style* (not a string prefix) so that a
-        # single-quoted or plain value that merely contains a double quote —
-        # e.g. description: '"x"' — cannot slip through.
-        errors.append(
-            "`description` must be a double-quoted YAML scalar (see create-skill/rules/format.md)"
-        )
+    else:
+        # Independent checks, so a value that breaks both rules reports both.
+        if len(description) > MAX_DESCRIPTION_LENGTH:
+            errors.append(
+                f"`description` is {len(description)} characters;"
+                f" the limit is {MAX_DESCRIPTION_LENGTH}"
+            )
+        if description_scalar_style(front) != '"':
+            # format.md: the description value must be a double-quoted YAML scalar.
+            # Checked via the parsed scalar *style* (not a string prefix) so that a
+            # single-quoted or plain value that merely contains a double quote —
+            # e.g. description: '"x"' — cannot slip through.
+            errors.append(
+                "`description` must be a double-quoted YAML scalar"
+                " (see create-skill/rules/format.md)"
+            )
 
     return errors
 

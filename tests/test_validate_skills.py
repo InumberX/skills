@@ -167,6 +167,23 @@ class TestCheck(unittest.TestCase):
         md = self.write_skill("do-thing", frontmatter("do-thing", f'description: "{text}"'))
         self.assert_error_contains(validate_skills.check(md), "the limit is 1024")
 
+    def test_description_length_counts_characters_not_bytes(self):
+        text = "あ" * 1024
+        md = self.write_skill("do-thing", frontmatter("do-thing", f'description: "{text}"'))
+        self.assertEqual(validate_skills.check(md), [])
+
+    def test_long_and_unquoted_description_reports_both(self):
+        text = "x" * 1025
+        md = self.write_skill("do-thing", f"---\nname: do-thing\ndescription: {text}\n---\n")
+        errors = validate_skills.check(md)
+        self.assert_error_contains(errors, "the limit is 1024")
+        self.assert_error_contains(errors, "double-quoted")
+
+    def test_name_at_the_length_limit(self):
+        name = "a" * 64
+        md = self.write_skill(name, frontmatter(name, 'description: "Do the thing."'))
+        self.assertEqual(validate_skills.check(md), [])
+
     def test_name_over_the_length_limit(self):
         name = "a" * 65
         md = self.write_skill(name, frontmatter(name, 'description: "Do the thing."'))
