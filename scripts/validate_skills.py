@@ -11,6 +11,9 @@ Checks per SKILL.md:
   4. `name` is kebab-case and matches the skill directory name.
   5. `description` is wrapped in double quotes in the source (format.md rule:
      unquoted natural language with `:`/`#` breaks YAML parsing).
+  6. `name` is at most 64 characters and `description` at most 1024, the limits
+     of the Agent Skills specification. A longer value may be rejected or cut
+     off by the agent that loads the skill.
 
 Exit code is non-zero if any skill fails.
 """
@@ -26,6 +29,8 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SKILLS_DIR = REPO_ROOT / "skills"
 KEBAB_CASE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+MAX_NAME_LENGTH = 64
+MAX_DESCRIPTION_LENGTH = 1024
 
 
 def split_frontmatter(text: str) -> str | None:
@@ -65,20 +70,30 @@ def check(skill_md: Path) -> list[str]:
     else:
         if not KEBAB_CASE.match(name):
             errors.append(f"`name` must be kebab-case, got {name!r}")
+        if len(name) > MAX_NAME_LENGTH:
+            errors.append(f"`name` is {len(name)} characters; the limit is {MAX_NAME_LENGTH}")
         if name != skill_md.parent.name:
             errors.append(f"`name` ({name!r}) must match its directory ({skill_md.parent.name!r})")
 
     description = data.get("description")
     if not isinstance(description, str) or not description.strip():
         errors.append("`description` is missing or empty")
-    elif description_scalar_style(front) != '"':
-        # format.md: the description value must be a double-quoted YAML scalar.
-        # Checked via the parsed scalar *style* (not a string prefix) so that a
-        # single-quoted or plain value that merely contains a double quote —
-        # e.g. description: '"x"' — cannot slip through.
-        errors.append(
-            "`description` must be a double-quoted YAML scalar (see create-skill/rules/format.md)"
-        )
+    else:
+        # Independent checks, so a value that breaks both rules reports both.
+        if len(description) > MAX_DESCRIPTION_LENGTH:
+            errors.append(
+                f"`description` is {len(description)} characters;"
+                f" the limit is {MAX_DESCRIPTION_LENGTH}"
+            )
+        if description_scalar_style(front) != '"':
+            # format.md: the description value must be a double-quoted YAML scalar.
+            # Checked via the parsed scalar *style* (not a string prefix) so that a
+            # single-quoted or plain value that merely contains a double quote —
+            # e.g. description: '"x"' — cannot slip through.
+            errors.append(
+                "`description` must be a double-quoted YAML scalar"
+                " (see create-skill/rules/format.md)"
+            )
 
     return errors
 

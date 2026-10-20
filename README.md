@@ -91,7 +91,7 @@ CI（`.github/workflows/validate.yml`）で自動実行する。ローカルで�
 
 | 対象 | コマンド | 内容 |
 | --- | --- | --- |
-| SKILL.md の frontmatter | `python3 scripts/validate_skills.py` | `name` / `description` の有無、ケバブケース、ディレクトリ名との一致、ダブルクォート |
+| SKILL.md の frontmatter | `python3 scripts/validate_skills.py` | `name` / `description` の有無、ケバブケース、ディレクトリ名との一致、ダブルクォート、長さ（`name` は 64 文字、`description` は 1024 文字まで） |
 | マーケットプレイス | `python3 scripts/validate_marketplace.py` | `marketplace.json` と `skills/` の同期 |
 | 日本語の括弧 | `python3 scripts/validate_text.py` | 日本語を囲む半角括弧、全角と半角が対応していない括弧 |
 | ユニットテスト | `python3 -m unittest discover -s tests -p "test_*.py"` | 上記バリデータと、`hand-off-context` の補助スクリプト（`scripts/handoff_tool.py`）のテスト |

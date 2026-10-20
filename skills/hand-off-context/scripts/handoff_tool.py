@@ -26,6 +26,8 @@ Exit codes: 0 success, 1 problems found or the operation was refused,
 from __future__ import annotations
 
 import argparse
+import bisect
+import contextlib
 import json
 import os
 import re
@@ -97,28 +99,54 @@ SECRET_PATTERNS: tuple[tuple[str, str], ...] = (
     ("slack-token", r"\bxox[abprs]-[A-Za-z0-9-]{10,}"),
     ("google-api-key", r"\bAIza[0-9A-Za-z_-]{35}\b"),
     ("jwt", r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}"),
-    ("url-credentials", r"[a-z][a-z0-9+.-]*://[^/\s:@]+:(?P<value>[^/\s@]+)@"),
+    # The lookbehind makes each URL start only at a token boundary, so a long run
+    # of letters cannot make the engine retry the scheme at every position. The
+    # user may be empty (`redis://:pw@host`) and the password runs to the last
+    # "@" of the authority, so an unencoded "@" inside it is masked too.
+    (
+        "url-credentials",
+        r"(?<![A-Za-z0-9+.-])[A-Za-z][A-Za-z0-9+.-]*://[^/\s:@]*:(?P<value>[^/\s]*)@",
+    ),
+)
+# A secret-like key followed by a separator. Everything after the separator up
+# to the end of the line is masked (see secret_assignment_findings): deciding
+# where a value ends is what let parts of secrets through before.
+SECRET_KEY_WORDS_PATTERN = (
+    "password|passwd|secret|token|api[_-]?key|private[_-]key|credential|authorization|パスワード"
 )
 SECRET_ASSIGNMENT = (
     "secret-assignment",
-    r"(?i)\b(?P<key>[\w.-]*(?:password|passwd|secret|token|api_key|apikey|private_key|credential)"
-    r"[\w.-]*)[\"']?[ \t]*[:=][ \t]*[\"']?(?P<value>[^\s\"',;\u3000、。]+)",
+    # The key starts at a token boundary (lookbehind) and its prefix is lazy,
+    # so the engine tries one start per token instead of every position.
+    # Up to four closing characters may sit between the key and the separator:
+    # `config["password"] =`, `os.environ['TOKEN'] =`, `{\"password\":`.
+    rf"(?i)(?<![\w.-])(?P<key>[\w.-]*?(?:{SECRET_KEY_WORDS_PATTERN})[\w.-]*)"
+    r"[\\\"'`\])]{0,4}[ \t]*(?P<sep>:=|==|=>|[:=\uff1a])",
 )
 PRIVATE_KEY_BLOCK = re.compile(
     r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?(?:-----END [A-Z ]*PRIVATE KEY-----|\Z)", re.S
 )
 # Values that are clearly not secrets: placeholders, references to the
-# environment, and values already masked.
+# environment, and values already masked. Each form is kept narrow and
+# case-consistent, because a real secret that merely looks like a placeholder
+# would be written out: `$TOKEN`, `${token}` and `<your-token>` pass, while
+# `$WeePW123`, `${Zq9vK2mX}` and `<yUeMrbIP>` (mixed case) are secrets.
+NAME = r"(?:[A-Z_][A-Z0-9_]*|[a-z_][a-z0-9_]*)"
 PLACEHOLDER = re.compile(
-    r"^(?:x+|\*+|\.{3}|<[^>]*>|\$\{?\w+\}?|process\.env\.\w+|os\.environ\S*|env\.\w+"
-    r"|\[REDACTED\]|none|null|unknown|true|false|undefined)$",
-    re.I,
+    rf"^(?:x+|X+|\*+|\.{{3}}|<(?:[a-z0-9]+(?:[ _-][a-z0-9]+)*|[A-Z0-9]+(?:[ _-][A-Z0-9]+)*)>"
+    rf"|\$\{{{NAME}\}}|\${NAME}|(?:process\.)?env\.{NAME}"
+    r"|os\.environ(?:\[[^\]]+\]|\.get\([^)]*\))?|\[REDACTED\]"
+    "|(?i:none|null|nil|unknown|true|false|undefined)|\u306a\u3057|\u672a\u8a2d\u5b9a)$"
 )
 # A number under a key whose only secret-like word is "token" is a count
 # (`max_tokens: 1024`, `TOKEN_LIMIT=4096`), not a credential. Under any other
 # word (`password=12345678`) a number can be a PIN or password, so it is kept.
-SECRET_KEY_WORDS = re.compile(r"password|passwd|secret|token|api_?key|private_key|credential", re.I)
+SECRET_KEY_WORDS = re.compile(SECRET_KEY_WORDS_PATTERN, re.I)
 NUMBER = re.compile(r"^\d+(?:\.\d+)?$")
+# YAML block scalars (`|`, `>-`) and an opened triple quote put the value on the
+# following lines.
+# A YAML comment needs whitespace before "#": `|#abc` is a value, not a block.
+BLOCK_START = re.compile(r"(?:[|>][-+0-9]*|\"\"\"|\'\'\')(?:[ \t]+#.*)?[ \t]*")
 FRONTMATTER_BLOCK = re.compile(r"\A\ufeff?---[ \t]*\r?\n.*?^---[ \t]*\r?$", re.S | re.M)
 
 
@@ -160,13 +188,19 @@ def find_root(explicit: str | None) -> Path:
     return Path(top.strip()).resolve() if top else cwd.resolve()
 
 
+def current_umask() -> int:
+    mask = os.umask(0)
+    os.umask(mask)
+    return mask
+
+
 def atomic_write(path: Path, text: str) -> None:
     """Write text to path via a temporary file in the same directory.
 
     os.replace is atomic on POSIX and Windows when source and target share a
     filesystem, so a reader never sees a half-written file. Line endings are
-    written as given, and an existing file keeps its permissions (mkstemp
-    creates the temporary file as 0600).
+    written as given. An existing file keeps its permissions and a new file
+    follows the umask (mkstemp alone would leave every file at 0600).
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
@@ -175,6 +209,13 @@ def atomic_write(path: Path, text: str) -> None:
             fh.write(text)
         if path.exists():
             shutil.copymode(path, tmp)
+        else:
+            # A new file gets the same mode as one created by the agent's own
+            # file tools, so .handoff/ does not mix 0600 and 0644 files.
+            # Best effort: some filesystems (network shares, FAT) refuse chmod,
+            # and the mode is not worth failing the write over.
+            with contextlib.suppress(OSError):
+                os.chmod(tmp, 0o666 & ~current_umask())
         os.replace(tmp, path)
     except BaseException:
         Path(tmp).unlink(missing_ok=True)
@@ -502,21 +543,260 @@ class Finding:
     end: int
 
 
-def is_token_count(match: re.Match[str]) -> bool:
-    if "key" not in match.re.groupindex or not NUMBER.match(match.group("value")):
+def is_token_count(key: str, value: str) -> bool:
+    if not NUMBER.match(value):
         return False
-    words = {word.lower() for word in SECRET_KEY_WORDS.findall(match.group("key"))}
+    words = {word.lower() for word in SECRET_KEY_WORDS.findall(key)}
     return words == {"token"}
 
 
+# A value's first word is read at most this far, so a long line without
+# whitespace and with many keys stays linear. A longer word is no placeholder.
+MAX_WORD = 256
+WORD = re.compile(rf"\S{{1,{MAX_WORD + 1}}}")
+NON_SPACE = re.compile(r"\S")
+# Values on lines longer than this are masked to the end of the line without
+# looking for a value continued on later lines (which needs the whole line).
+MAX_ANALYSED_LINE = 4096
+# A value continued on later lines is followed at most this many lines.
+MAX_CONTINUATION_LINES = 200
+# `src/auth/token.ts:42` is a file and line number, not a key and a value.
+FILE_NAME_KEY = re.compile(r"\.[A-Za-z][A-Za-z0-9]{0,5}$")
+# A following line that starts its own key: a quoted key (`"user":`) or a YAML
+# key followed by whitespace or the end of the line (`next: 1`). Anything less
+# clear is taken as the value and masked (`"ab:cd"`, `abc:def`).
+KEY_LINE = re.compile(r"[ \t]*(?:\"[\w.-]+\"|'[\w.-]+'|[\w.-]+)[ \t]*:(?:[ \t]|$)")
+
+
+def sole_word(text: str, start: int, end: int) -> tuple[str | None, bool]:
+    """(first word, whether it is the only word) of text[start:end].
+
+    Looks at no more than the first two words, so a long line costs the same as
+    a short one; slicing or splitting the rest of the line on every match made
+    a long single-line text quadratic.
+    """
+    first = WORD.search(text, start, end)
+    if first is None:
+        return None, False
+    if len(first.group()) > MAX_WORD:
+        return first.group(), False
+    return first.group(), NON_SPACE.search(text, first.end(), end) is None
+
+
+def is_placeholder(word: str) -> bool:
+    """Whether a value's only word is a placeholder (`None`, `${TOKEN}`).
+
+    Quotes, brackets and sentence punctuation around the word are tried off one
+    at a time (`"None"`, `None):`), so `${TOKEN}` keeps its own braces. Callers
+    pass only a value that is a single word: in `password: None hunter2` or
+    `password: None # was hunter2` the rest of the line may hold the secret.
+    Only decides whether to mask, never how much.
+    """
+    word = word.lstrip("\"'`(\uff08")
+    while word:
+        if PLACEHOLDER.match(word):
+            return True
+        if word[-1] not in "\"'`)\uff09]},;:.!?":
+            return False
+        word = word[:-1]
+    return False
+
+
+def bare_word(word: str) -> str:
+    """A word without surrounding quotes, brackets and punctuation."""
+    return word.strip("\"'`)\uff09]},;:.!?(\uff08[")
+
+
+class LineIndex:
+    """Line numbers and bounds by offset, computed once per text.
+
+    Searching backwards for the previous newline on every finding made a long
+    single-line text quadratic.
+    """
+
+    def __init__(self, text: str) -> None:
+        self.text = text
+        self.newlines = [i for i, c in enumerate(text) if c == "\n"]
+
+    def number(self, offset: int) -> int:
+        return bisect.bisect_left(self.newlines, offset) + 1
+
+    def bounds(self, offset: int) -> tuple[int, int]:
+        """(start, end) of the line containing offset, end excluding "\r\n"."""
+        i = bisect.bisect_left(self.newlines, offset)
+        start = self.newlines[i - 1] + 1 if i else 0
+        end = self.newlines[i] if i < len(self.newlines) else len(self.text)
+        if self.text[end - 1 : end] == "\r":
+            end -= 1
+        return start, end
+
+
+def indent_of(line: str) -> int:
+    """Width of the leading whitespace, with tabs expanded to 8 columns."""
+    return len(line[: len(line) - len(line.lstrip(" \t"))].expandtabs(8))
+
+
+def following_lines(text: str, lines: LineIndex, line_end: int):
+    """(start, end, line) of up to MAX_CONTINUATION_LINES lines after line_end."""
+    pos = line_end
+    for _ in range(MAX_CONTINUATION_LINES):
+        nl = text.find("\n", pos)
+        if nl == -1:
+            return
+        start, end = lines.bounds(nl + 1)
+        yield start, end, text[start:end]
+        pos = end
+
+
+BRACKETS = {"(": ")", "[": "]", "{": "}"}
+
+
+def open_brackets(value: str) -> int:
+    return sum(value.count(o) - value.count(c) for o, c in BRACKETS.items())
+
+
+def unclosed_triple_quote(value: str) -> str | None:
+    for quote in ('"""', "'''"):
+        if value.count(quote) % 2 == 1:
+            return quote
+    return None
+
+
+def continuation_spans(
+    text: str,
+    lines: LineIndex,
+    line_start: int,
+    line_end: int,
+    value: str,
+    empty: bool,
+    by_indent: bool,
+) -> list[tuple[int, int]]:
+    """Spans of the following lines that carry a value continued from the key's line.
+
+    - An unclosed triple quote: the lines up to the one that closes it.
+    - Brackets left open at the end of the line (`password = (`): the lines
+      until they balance.
+    - A trailing backslash: the lines while each one ends in a backslash.
+    - With by_indent (an empty value, a YAML block scalar, `null` with an
+      indented continuation): the lines indented deeper than the key's line, skipping
+      blank lines. After an empty value, a next line at the same indent that
+      does not start its own key is taken as the value too (`"password":` then
+      `"x"` on the next line).
+
+    All of them stop after MAX_CONTINUATION_LINES lines.
+    """
+
+    def content(start: int, end: int, line: str) -> tuple[int, int]:
+        return start + len(line) - len(line.lstrip(" \t")), end
+
+    spans: list[tuple[int, int]] = []
+    triple = unclosed_triple_quote(value)
+    if triple:
+        for start, end, line in following_lines(text, lines, line_end):
+            if line.strip():
+                spans.append(content(start, end, line))
+            if triple in line:
+                break
+        return spans
+    depth = open_brackets(value)
+    # Only a line that ends inside the brackets (`password = (`, `f(password=x,`)
+    # continues; an unclosed "(" in the middle of prose does not.
+    if depth > 0 and value.rstrip()[-1:] in ("(", "[", "{", ","):
+        for start, end, line in following_lines(text, lines, line_end):
+            if line.strip():
+                spans.append(content(start, end, line))
+            depth += open_brackets(line)
+            if depth <= 0:
+                break
+        return spans
+    if value.rstrip().endswith("\\"):
+        for start, end, line in following_lines(text, lines, line_end):
+            spans.append(content(start, end, line))
+            if not line.rstrip().endswith("\\"):
+                break
+        return spans
+    if not by_indent:
+        # A one-line value such as `token: rotate it` followed by an indented
+        # list in prose: the list is not part of the value.
+        return spans
+    key_indent = indent_of(text[line_start:line_end])
+    for start, end, line in following_lines(text, lines, line_end):
+        if not line.strip():
+            continue
+        if indent_of(line) > key_indent:
+            spans.append(content(start, end, line))
+            continue
+        if empty and not spans and not KEY_LINE.match(line):
+            spans.append(content(start, end, line))
+        break
+    return spans
+
+
+def secret_assignment_findings(text: str) -> list[Finding]:
+    """Mask everything after a secret-like `key=` / `key:` to the end of the line.
+
+    Deciding where a value ends (quotes, escapes, brackets, spaces) kept letting
+    part of a secret through, so the rest of the line is masked instead; masking
+    too much hides some text, masking too little writes part of a secret out.
+    When the value continues on later lines (see continuation_spans), those
+    lines are masked too.
+    """
+    findings: list[Finding] = []
+    kind, pattern = SECRET_ASSIGNMENT
+    lines = LineIndex(text)
+    # End of the text already masked. A key inside it is masked with it; looking
+    # at it again would rescan the same continuation lines once per key.
+    covered = 0
+    for match in re.finditer(pattern, text, re.ASCII):
+        if match.start() < covered:
+            continue
+        line_start, line_end = lines.bounds(match.start())
+        value_start = match.end()
+        while value_start < line_end and text[value_start] in " \t":
+            value_start += 1
+        key = match.group("key")
+        if (
+            match.group("sep") == ":"
+            and FILE_NAME_KEY.search(key)
+            and text[value_start : value_start + 1].isdigit()
+        ):
+            continue  # `token.ts:42` is a file name and a line number
+        word, single = sole_word(text, value_start, line_end)
+        if line_end - value_start > MAX_ANALYSED_LINE:
+            findings.append(Finding(kind, lines.number(value_start), value_start, line_end))
+            covered = max(covered, line_end)
+            continue
+        value = text[value_start:line_end]
+        empty = word is None
+        skippable = single and (
+            not word.strip("\"'`")  # an empty string such as `password=""`
+            or is_placeholder(word)
+            or is_token_count(key, bare_word(word))
+        )
+        block = not empty and BLOCK_START.fullmatch(value)
+        by_indent = bool(empty or block or skippable)
+        follows = continuation_spans(text, lines, line_start, line_end, value, empty, by_indent)
+        if (empty or skippable) and not follows:
+            # A placeholder or an empty value with nothing continued below it:
+            # there is nothing to mask. A block opener is masked regardless, in
+            # case it is not a block opener after all.
+            continue
+        spans = ([] if empty else [(value_start, line_end)]) + follows
+        for start, end in spans:
+            findings.append(Finding(kind, lines.number(start), start, end))
+        covered = max(covered, spans[-1][1]) if spans else covered
+    return findings
+
+
 def find_secrets(text: str) -> list[Finding]:
-    spans: list[Finding] = []
-    for kind, pattern in (*SECRET_PATTERNS, SECRET_ASSIGNMENT):
+    spans = secret_assignment_findings(text)
+    lines = LineIndex(text)
+    for kind, pattern in SECRET_PATTERNS:
         # ASCII mode: in Unicode mode Japanese letters count as \w, so `\b` finds no
         # boundary in "トークンはghp_..." and the token would go undetected.
         for match in re.finditer(pattern, text, re.ASCII):
             if "value" in match.re.groupindex:
-                if PLACEHOLDER.match(match.group("value")) or is_token_count(match):
+                if not match.group("value") or PLACEHOLDER.match(match.group("value")):
                     continue
                 start, end = match.span("value")
             elif kind == "private-key":
@@ -524,33 +804,49 @@ def find_secrets(text: str) -> list[Finding]:
                 start, end = match.start(), block.end() if block else match.end()
             else:
                 start, end = match.span()
-            spans.append(Finding(kind, text.count("\n", 0, start) + 1, start, end))
-    # Keep the first, widest match where patterns overlap (sk-ant- is also sk-).
+            spans.append(Finding(kind, lines.number(start), start, end))
+    # Merge overlapping spans instead of dropping one, so the tail of a wider
+    # finding that starts later is still masked.
     spans.sort(key=lambda f: (f.start, -(f.end - f.start)))
     findings: list[Finding] = []
     for finding in spans:
         if findings and finding.start < findings[-1].end:
+            findings[-1].end = max(findings[-1].end, finding.end)
             continue
         findings.append(finding)
     return findings
 
 
 def redact(text: str, findings: list[Finding]) -> str:
-    for finding in sorted(findings, key=lambda f: f.start, reverse=True):
-        text = text[: finding.start] + REDACTED + text[finding.end :]
-    return text
+    parts: list[str] = []
+    pos = 0
+    for finding in sorted(findings, key=lambda f: f.start):
+        parts.append(text[pos : finding.start])
+        parts.append(REDACTED)
+        pos = max(pos, finding.end)
+    parts.append(text[pos:])
+    return "".join(parts)
+
+
+class SectionIndex:
+    """Section titles by offset, computed once per text (bisect per lookup)."""
+
+    def __init__(self, text: str) -> None:
+        block = FRONTMATTER_BLOCK.match(text)
+        self.frontmatter_end = block.end() if block else 0
+        found = headings_with_offsets(text)
+        self.starts = [start for start, _level, _title in found]
+        self.titles = [title for _start, _level, title in found]
+
+    def title(self, offset: int) -> str:
+        if offset < self.frontmatter_end:
+            return "(frontmatter)"
+        i = bisect.bisect_right(self.starts, offset)
+        return self.titles[i - 1] if i else "(before the first heading)"
 
 
 def section_of(text: str, offset: int) -> str:
-    block = FRONTMATTER_BLOCK.match(text)
-    if block and offset < block.end():
-        return "(frontmatter)"
-    title = "(before the first heading)"
-    for start, _level, heading in headings_with_offsets(text):
-        if start > offset:
-            break
-        title = heading
-    return title
+    return SectionIndex(text).title(offset)
 
 
 # --------------------------------------------------------------------------
@@ -600,9 +896,10 @@ def cmd_scan(args: argparse.Namespace) -> int:
     if not findings:
         print(f"OK   no secrets detected in {path}")
         return 0
+    sections = SectionIndex(text)
     for finding in findings:
         # Never print the matched value itself.
-        section = section_of(text, finding.start)
+        section = sections.title(finding.start)
         print(f"FOUND line {finding.line} [{section}]: {finding.kind}")
     if args.redact:
         atomic_write(path, redact(text, findings))
@@ -663,6 +960,15 @@ def cmd_publish(args: argparse.Namespace) -> int:
         print("refused: the draft is not a valid Handoff File; nothing was changed")
         return 1
 
+    draft_text = read_text(draft)
+    sections = SectionIndex(draft_text)
+    for finding in find_secrets(draft_text):
+        # A safety net for a skipped `scan`; not a refusal, since some findings are false positives.
+        report.warnings.append(
+            f"possible secret on line {finding.line} [{sections.title(finding.start)}]:"
+            f" {finding.kind}; run `scan` to review it"
+        )
+
     new_id = str(data["handoff_id"])
     # The id becomes a file name under history/; anything but the documented
     # shape could point outside it (e.g. "../../x").
@@ -679,8 +985,26 @@ def cmd_publish(args: argparse.Namespace) -> int:
         old = parse_frontmatter(split[0], Report()) if split else {}
         old_id = old.get("handoff_id")
         if old_id == new_id:
-            print(f"refused: the draft reuses the current handoff_id {new_id}; nothing was changed")
-            return 1
+            if current_text != draft_text:
+                print(
+                    f"refused: the draft reuses the current handoff_id {new_id};"
+                    " nothing was changed"
+                )
+                return 1
+            metadata, problem = load_metadata(handoff_dir / METADATA_FILE)
+            if problem is None and metadata and metadata.get("handoff_id") == new_id:
+                # Already published, and possibly imported since: re-running must
+                # not reset the status recorded by `mark`. Only tidy up what a
+                # normal publish would have left behind.
+                print_report(report)
+                ensure_gitignore(root, handoff_dir)
+                remove_draft(handoff_dir, draft)
+                print(f"already published {new_id}; the handoff was not changed")
+                return 0
+            # An earlier publish replaced handoff.md and then failed before
+            # metadata.json. Finish it instead of refusing for good.
+            print_report(report)
+            return finish_publish(root, handoff_dir, draft, new_id, resumed=True)
         if isinstance(old_id, str) and HANDOFF_ID.match(old_id):
             name = f"{old_id}.md"
             if data.get("previous_handoff_id") != old_id:
@@ -691,29 +1015,46 @@ def cmd_publish(args: argparse.Namespace) -> int:
             name = f"invalid-{new_id}.md"
         archive = handoff_dir / HISTORY_DIR / name
         if archive.exists():
-            print(f"refused: {archive} already exists; nothing was changed")
-            return 1
-
-    draft_text = read_text(draft)
-    for finding in find_secrets(draft_text):
-        # A safety net for a skipped `scan`; not a refusal, since some findings are false positives.
-        report.warnings.append(
-            f"possible secret on line {finding.line} [{section_of(draft_text, finding.start)}]:"
-            f" {finding.kind}; run `scan` to review it"
-        )
+            if read_text(archive) == current_text:
+                # An earlier publish archived this handoff and then failed before
+                # replacing it. The copy is identical, so reuse it.
+                print(f"already archived: {archive.relative_to(root).as_posix()}")
+                archive = None
+            else:
+                print(f"refused: {archive} already exists; nothing was changed")
+                return 1
 
     print_report(report)
-    gitignore = handoff_dir / ".gitignore"
-    if not gitignore.exists():
-        atomic_write(gitignore, "*\n")
+    # Each completed write is printed, so a failure part-way says exactly how far
+    # it got; re-running the same command then picks up from there.
+    ensure_gitignore(root, handoff_dir)
     if archive is not None and current_text is not None:
         atomic_write(archive, current_text)
         print(f"archived the previous handoff to {archive.relative_to(root).as_posix()}")
     atomic_write(current, draft_text)
-    atomic_write(handoff_dir / METADATA_FILE, metadata_document(new_id, "ready", None, None))
+    print(f"wrote {current.relative_to(root).as_posix()}")
+    return finish_publish(root, handoff_dir, draft, new_id, resumed=False)
+
+
+def ensure_gitignore(root: Path, handoff_dir: Path) -> None:
+    gitignore = handoff_dir / ".gitignore"
+    if not gitignore.exists():
+        atomic_write(gitignore, "*\n")
+        print(f"wrote {gitignore.relative_to(root).as_posix()}")
+
+
+def remove_draft(handoff_dir: Path, draft: Path) -> None:
     if draft.resolve().parent == handoff_dir.resolve() and draft.name == DRAFT_FILE:
         draft.unlink()
-    print(f"published {current.relative_to(root).as_posix()} ({new_id})")
+
+
+def finish_publish(root: Path, handoff_dir: Path, draft: Path, new_id: str, resumed: bool) -> int:
+    metadata = handoff_dir / METADATA_FILE
+    atomic_write(metadata, metadata_document(new_id, "ready", None, None))
+    print(f"wrote {metadata.relative_to(root).as_posix()}")
+    remove_draft(handoff_dir, draft)
+    verb = "finished publishing" if resumed else "published"
+    print(f"{verb} {(handoff_dir / HANDOFF_FILE).relative_to(root).as_posix()} ({new_id})")
     return 0
 
 
@@ -755,13 +1096,16 @@ def cmd_clear(args: argparse.Namespace) -> int:
     if not targets:
         print("nothing to delete")
         return 0
-    for path in targets:
-        print(f"{'delete' if args.yes else 'would delete'} {path.relative_to(root).as_posix()}")
     if not args.yes:
+        for path in targets:
+            print(f"would delete {path.relative_to(root).as_posix()}")
         print(f"{len(targets)} file(s); re-run with --yes after the user confirms")
         return 0
+    # Report each file only after it is gone, so a failure part-way leaves an
+    # accurate record of what was deleted.
     for path in targets:
         path.unlink()
+        print(f"deleted {path.relative_to(root).as_posix()}")
     print(f"deleted {len(targets)} file(s)")
     return 0
 
@@ -824,7 +1168,24 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "clear" and args.keep is not None and args.keep < 0:
         print("error: --keep must be 0 or more", file=sys.stderr)
         return 2
-    return args.func(args)
+    try:
+        return args.func(args)
+    except UnicodeDecodeError as exc:
+        # A file that is not UTF-8 (written by another tool, or damaged).
+        print(f"error: a file is not valid UTF-8: {exc}", file=sys.stderr)
+        print("nothing after this point was changed", file=sys.stderr)
+        return 1
+    except OSError as exc:
+        # Permission denied, disk full and the like: report it plainly instead
+        # of a traceback. Writes go through atomic_write, so no file is left
+        # half-written, and every completed write or deletion was printed.
+        print(f"error: {exc}", file=sys.stderr)
+        print(
+            "stopped here: files written or deleted so far are listed above;"
+            " no file was left half-written. Fix the cause and run the same command again",
+            file=sys.stderr,
+        )
+        return 1
 
 
 if __name__ == "__main__":
