@@ -310,6 +310,12 @@ class TestSecrets(unittest.TestCase):
             redacted, "STRIPE_SECRET_KEY=[REDACTED]\nurl postgres://user:[REDACTED]@db/x\n"
         )
 
+    def test_values_end_at_closing_brackets_and_backticks(self):
+        for text in ("def f(token=None):", "`token=None`", "call(api_key=[REDACTED])"):
+            with self.subTest(text=text):
+                self.assertEqual(self.kinds(text), [])
+        self.assertEqual(self.kinds("f(password=hunter2xyz)"), ["secret-assignment"])
+
     def test_token_counts_are_ignored(self):
         self.assertEqual(self.kinds("max_tokens: 1024\nTOKEN_LIMIT=4096\ntoken_ratio: 0.5\n"), [])
 
@@ -351,6 +357,15 @@ class TestScanCommand(TempDirTest):
         path.write_bytes(b"x\r\npassword=hunter2xyz\r\n")
         run("scan", str(path), "--redact")
         self.assertEqual(path.read_bytes(), b"x\r\npassword=[REDACTED]\r\n")
+
+    @unittest.skipIf(os.name == "nt", "POSIX permission bits")
+    def test_new_files_follow_umask(self):
+        previous = os.umask(0o022)
+        try:
+            handoff_tool.atomic_write(self.root / "new.md", "x\n")
+        finally:
+            os.umask(previous)
+        self.assertEqual((self.root / "new.md").stat().st_mode & 0o777, 0o644)
 
     @unittest.skipIf(os.name == "nt", "POSIX permission bits")
     def test_redact_keeps_permissions(self):
@@ -448,6 +463,23 @@ class TestPublishAndMark(TempDirTest):
         self.assertEqual(metadata["status"], "imported")
         self.assertEqual(metadata["imported_by"], "codex")
         self.assertRegex(metadata["imported_at"], handoff_tool.ISO_8601)
+
+    @unittest.skipIf(os.name == "nt" or os.geteuid() == 0, "needs a non-root POSIX user")
+    def test_unwritable_directory_is_reported_without_traceback(self):
+        self.publish(handoff())
+        before = (self.handoff_dir / "handoff.md").read_text()
+        self.handoff_dir.chmod(0o555)
+        try:
+            draft = self.write("draft2.md", handoff("20261020T020000Z-bbbb"))
+            err = io.StringIO()
+            with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
+                code = handoff_tool.main(["publish", str(draft), "--root", str(self.root)])
+        finally:
+            self.handoff_dir.chmod(0o755)
+        self.assertEqual(code, 1)
+        self.assertIn("error:", err.getvalue())
+        self.assertNotIn("Traceback", err.getvalue())
+        self.assertEqual((self.handoff_dir / "handoff.md").read_text(), before)
 
     def test_mark_without_handoff_changes_nothing(self):
         code, _out = run("mark", "--status", "invalid", "--root", str(self.root))

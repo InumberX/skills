@@ -102,7 +102,7 @@ SECRET_PATTERNS: tuple[tuple[str, str], ...] = (
 SECRET_ASSIGNMENT = (
     "secret-assignment",
     r"(?i)\b(?P<key>[\w.-]*(?:password|passwd|secret|token|api_key|apikey|private_key|credential)"
-    r"[\w.-]*)[\"']?[ \t]*[:=][ \t]*[\"']?(?P<value>[^\s\"',;\u3000、。]+)",
+    r"[\w.-]*)[\"']?[ \t]*[:=][ \t]*[\"']?(?P<value>[^\s\"'`,;)\u3000、。]+)",
 )
 PRIVATE_KEY_BLOCK = re.compile(
     r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?(?:-----END [A-Z ]*PRIVATE KEY-----|\Z)", re.S
@@ -160,13 +160,19 @@ def find_root(explicit: str | None) -> Path:
     return Path(top.strip()).resolve() if top else cwd.resolve()
 
 
+def current_umask() -> int:
+    mask = os.umask(0)
+    os.umask(mask)
+    return mask
+
+
 def atomic_write(path: Path, text: str) -> None:
     """Write text to path via a temporary file in the same directory.
 
     os.replace is atomic on POSIX and Windows when source and target share a
     filesystem, so a reader never sees a half-written file. Line endings are
-    written as given, and an existing file keeps its permissions (mkstemp
-    creates the temporary file as 0600).
+    written as given. An existing file keeps its permissions and a new file
+    follows the umask (mkstemp alone would leave every file at 0600).
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
@@ -175,6 +181,10 @@ def atomic_write(path: Path, text: str) -> None:
             fh.write(text)
         if path.exists():
             shutil.copymode(path, tmp)
+        else:
+            # A new file gets the same mode as one created by the agent's own
+            # file tools, so .handoff/ does not mix 0600 and 0644 files.
+            os.chmod(tmp, 0o666 & ~current_umask())
         os.replace(tmp, path)
     except BaseException:
         Path(tmp).unlink(missing_ok=True)
@@ -824,7 +834,15 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "clear" and args.keep is not None and args.keep < 0:
         print("error: --keep must be 0 or more", file=sys.stderr)
         return 2
-    return args.func(args)
+    try:
+        return args.func(args)
+    except OSError as exc:
+        # Permission denied, disk full and the like: report it plainly instead
+        # of a traceback. Writes go through atomic_write, so no file is left
+        # half-written; say so, since that is what the user needs to know.
+        print(f"error: {exc}", file=sys.stderr)
+        print("no file was left half-written; check the files listed above", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

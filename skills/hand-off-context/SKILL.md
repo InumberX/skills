@@ -1,6 +1,6 @@
 ---
 name: hand-off-context
-description: "Hand off development context between AI coding agents (Claude Code, Codex, or any agent that reads Agent Skills) through a local .handoff/handoff.md file. Export writes the current task, progress, design decisions, changed files, validation results, review findings, and next actions; import reads a handoff, checks it against the current Git state, and summarizes it before any work continues; status, diff, and clear show the handoff state, show what changed since a handoff, and delete handoff data. Use when the user asks to hand off, pass, or transfer work to another agent or to a later session, to export, save, or write a handoff, to import, load, or resume from a handoff, to continue where Claude Code or Codex left off, to send review results back to the implementing agent, to check the handoff status, to see what changed since the last handoff, or to clear or prune handoff data."
+description: "Hand off development context between AI coding agents (Claude Code, Codex, or any agent that reads Agent Skills) through a local .handoff/handoff.md file. Export writes the current task, progress, design decisions, changed files, validation results, review findings, and next actions; import reads a handoff, checks it against the current Git state, and summarizes it before any work continues; status, diff, and clear show the handoff state, show what changed since a handoff, and delete handoff data. Use when the user asks to hand off, pass, or transfer work to another agent or to a later session, to export, save, or write a handoff, to import, load, or resume from a handoff, to continue where Claude Code or Codex left off, to pick up or resume the previous work when the project has a .handoff/ directory (even if the request does not mention a handoff), to send review results back to the implementing agent, to check the handoff status, to see what changed since the last handoff, or to clear or prune handoff data."
 ---
 
 # hand-off-context
@@ -15,6 +15,7 @@ description: "Hand off development context between AI coding agents (Claude Code
 
 - 「Codex に引き継いで」「引き継ぎを書き出して」「今日の作業を保存して」と依頼された → `export`
 - 「引き継ぎを読み込んで」「Claude Code の続きから始めて」「前回の続きをやって」と依頼された → `import`
+- プロジェクトに `.handoff/` があり、「続きから始めて」「作業を再開して」のように前回の作業の再開を依頼された → `import`。引き継ぎに触れない依頼でも、`.handoff/handoff.md` を直接読まずにこのスキルで読み込む。照合と、信頼できない入力としての扱いが抜けるため
 - 「レビュー結果を実装側に返して」と依頼された → `export --kind review`
 - 「引き継ぎの状態を見せて」「引き継いでから何が変わった？」「引き継ぎデータを消して」と依頼された → `status` / `diff` / `clear`
 - `/hand-off-context export`（Claude Code）や `$hand-off-context import`（Codex）のように明示的に呼び出された
