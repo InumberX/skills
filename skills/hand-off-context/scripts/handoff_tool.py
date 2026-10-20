@@ -101,19 +101,24 @@ SECRET_PATTERNS: tuple[tuple[str, str], ...] = (
 )
 SECRET_ASSIGNMENT = (
     "secret-assignment",
-    r"(?i)\b[\w.-]*(?:password|passwd|secret|token|api_key|apikey|private_key|credential)"
-    r"[\w.-]*[\"']?[ \t]*[:=][ \t]*[\"']?(?P<value>[^\s\"',;\u3000、。]+)",
+    r"(?i)\b(?P<key>[\w.-]*(?:password|passwd|secret|token|api_key|apikey|private_key|credential)"
+    r"[\w.-]*)[\"']?[ \t]*[:=][ \t]*[\"']?(?P<value>[^\s\"',;\u3000、。]+)",
 )
 PRIVATE_KEY_BLOCK = re.compile(
     r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?(?:-----END [A-Z ]*PRIVATE KEY-----|\Z)", re.S
 )
 # Values that are clearly not secrets: placeholders, references to the
-# environment, values already masked, and plain numbers (`max_tokens: 1024`).
+# environment, and values already masked.
 PLACEHOLDER = re.compile(
     r"^(?:x+|\*+|\.{3}|<[^>]*>|\$\{?\w+\}?|process\.env\.\w+|os\.environ\S*|env\.\w+"
-    r"|\[REDACTED\]|none|null|unknown|true|false|undefined|\d+(?:\.\d+)?)$",
+    r"|\[REDACTED\]|none|null|unknown|true|false|undefined)$",
     re.I,
 )
+# A number under a key whose only secret-like word is "token" is a count
+# (`max_tokens: 1024`, `TOKEN_LIMIT=4096`), not a credential. Under any other
+# word (`password=12345678`) a number can be a PIN or password, so it is kept.
+SECRET_KEY_WORDS = re.compile(r"password|passwd|secret|token|api_?key|private_key|credential", re.I)
+NUMBER = re.compile(r"^\d+(?:\.\d+)?$")
 FRONTMATTER_BLOCK = re.compile(r"\A\ufeff?---[ \t]*\r?\n.*?^---[ \t]*\r?$", re.S | re.M)
 
 
@@ -279,13 +284,14 @@ def check_frontmatter(data: dict[str, object], report: Report) -> None:
         report.errors.append('`dirty` must be true, false or "Unknown"')
 
 
-def headings(body: str) -> list[tuple[int, str]]:
-    """Markdown ATX headings outside fenced code blocks."""
-    found: list[tuple[int, str]] = []
+def headings_with_offsets(text: str) -> list[tuple[int, int, str]]:
+    """(offset, level, title) of Markdown ATX headings outside fenced code blocks."""
+    found: list[tuple[int, int, str]] = []
     fence: str | None = None
-    for line in body.splitlines():
-        stripped = line.strip()
-        marker = stripped[:3]
+    offset = 0
+    for line in text.splitlines(keepends=True):
+        start, offset = offset, offset + len(line)
+        marker = line.strip()[:3]
         if marker in ("```", "~~~"):
             if fence is None:
                 fence = marker
@@ -296,8 +302,13 @@ def headings(body: str) -> list[tuple[int, str]]:
             continue
         match = re.match(r"^(#{1,6})\s+(.*?)\s*#*\s*$", line)
         if match:
-            found.append((len(match.group(1)), match.group(2)))
+            found.append((start, len(match.group(1)), match.group(2)))
     return found
+
+
+def headings(body: str) -> list[tuple[int, str]]:
+    """Markdown ATX headings outside fenced code blocks."""
+    return [(level, title) for _offset, level, title in headings_with_offsets(body)]
 
 
 def check_sections(body: str, kind: object, report: Report) -> None:
@@ -491,6 +502,13 @@ class Finding:
     end: int
 
 
+def is_token_count(match: re.Match[str]) -> bool:
+    if "key" not in match.re.groupindex or not NUMBER.match(match.group("value")):
+        return False
+    words = {word.lower() for word in SECRET_KEY_WORDS.findall(match.group("key"))}
+    return words == {"token"}
+
+
 def find_secrets(text: str) -> list[Finding]:
     spans: list[Finding] = []
     for kind, pattern in (*SECRET_PATTERNS, SECRET_ASSIGNMENT):
@@ -498,7 +516,7 @@ def find_secrets(text: str) -> list[Finding]:
         # boundary in "トークンはghp_..." and the token would go undetected.
         for match in re.finditer(pattern, text, re.ASCII):
             if "value" in match.re.groupindex:
-                if PLACEHOLDER.match(match.group("value")):
+                if PLACEHOLDER.match(match.group("value")) or is_token_count(match):
                     continue
                 start, end = match.span("value")
             elif kind == "private-key":
@@ -528,8 +546,10 @@ def section_of(text: str, offset: int) -> str:
     if block and offset < block.end():
         return "(frontmatter)"
     title = "(before the first heading)"
-    for match in re.finditer(r"^#{1,6}\s+(.*?)\s*$", text[:offset], re.M):
-        title = match.group(1)
+    for start, _level, heading in headings_with_offsets(text):
+        if start > offset:
+            break
+        title = heading
     return title
 
 

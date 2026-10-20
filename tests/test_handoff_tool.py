@@ -310,14 +310,21 @@ class TestSecrets(unittest.TestCase):
             redacted, "STRIPE_SECRET_KEY=[REDACTED]\nurl postgres://user:[REDACTED]@db/x\n"
         )
 
-    def test_plain_numbers_are_ignored(self):
-        self.assertEqual(self.kinds("max_tokens: 1024\nTOKEN_LIMIT=4096\nratio: 0.5\n"), [])
+    def test_token_counts_are_ignored(self):
+        self.assertEqual(self.kinds("max_tokens: 1024\nTOKEN_LIMIT=4096\ntoken_ratio: 0.5\n"), [])
+
+    def test_numeric_passwords_are_detected(self):
+        for text in ("password=12345678", "DB_SECRET: 4321", "api_key=9876543210"):
+            with self.subTest(text=text):
+                self.assertEqual(self.kinds(text), ["secret-assignment"])
 
     def test_section_labels(self):
         text = handoff()
         self.assertEqual(handoff_tool.section_of(text, text.index("kind")), "(frontmatter)")
         self.assertEqual(handoff_tool.section_of(text, text.index("## Notes") + 9), "Notes")
         self.assertEqual(handoff_tool.section_of("plain text", 3), "(before the first heading)")
+        fenced = "## Notes\n```\n## Fake\n```\npassword=x\n"
+        self.assertEqual(handoff_tool.section_of(fenced, fenced.index("password")), "Notes")
 
     def test_placeholders_are_ignored(self):
         for value in ("xxx", "<your-token>", "${TOKEN}", "process.env.TOKEN", "[REDACTED]"):
@@ -340,7 +347,7 @@ class TestSecrets(unittest.TestCase):
 
 class TestScanCommand(TempDirTest):
     def test_redact_keeps_line_endings(self):
-        path = self.write("crlf.md", "x\r\npassword=hunter2xyz\r\n")
+        path = self.root / "crlf.md"
         path.write_bytes(b"x\r\npassword=hunter2xyz\r\n")
         run("scan", str(path), "--redact")
         self.assertEqual(path.read_bytes(), b"x\r\npassword=[REDACTED]\r\n")

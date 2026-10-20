@@ -12,7 +12,7 @@
 
 1. `rules/import.md` の手順 2 と同じ検証を行う
 2. frontmatter から `handoff_id`・`kind`・`source_agent`・`created_at`・`project`・`branch` を読む
-3. `### In Progress` と `### Pending` の直下にある箇条書きの数を数える（`None` は数えない）
+3. `### In Progress` と `### Pending` の下にある、インデントのない箇条書きの数を数える（`None` は数えない）。入れ子の項目は上の項目の詳細であり、別のタスクではないため
 4. `.handoff/metadata.json` の `status` を読む。読めなければ `Unknown` とする
 5. `.handoff/history/` にある `.md` ファイルの数を数える
 

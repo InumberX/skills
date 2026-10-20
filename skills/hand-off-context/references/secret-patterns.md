@@ -27,7 +27,7 @@ export で書き出す前に、内容に秘密情報が含まれていないか�
 | 認証情報付きの URL | `[a-z][a-z0-9+.-]*://[^/\s:@]+:(?P<value>[^/\s@]+)@` |
 | 秘密らしいキーへの代入 | キー名に `password`・`passwd`・`secret`・`token`・`api_key`・`apikey`・`private_key`・`credential` を含み（大文字小文字を区別しない）、`=` または `:` の後に値があるもの |
 
-最後の 2 つは誤検出が多い。値がプレースホルダ（`xxx`・`<your-token>`・`${TOKEN}`・`process.env.TOKEN` など）や数字だけ（`max_tokens: 1024` など）なら置き換えなくてよい。
+最後の 2 つは誤検出が多い。値がプレースホルダ（`xxx`・`<your-token>`・`${TOKEN}`・`process.env.TOKEN` など）なら置き換えなくてよい。キー名に含まれる語が `token` だけで、値が数字だけのもの（`max_tokens: 1024`・`TOKEN_LIMIT=4096` など）はトークン数なので置き換えなくてよい。`password=12345678` のように `password`・`secret` などを含むキーでは、数字だけでも PIN やパスワードの可能性があるため置き換える。
 
 正規表現は ASCII モード（Python の `re.ASCII`）で照合する。Unicode モードでは日本語の文字も `\w` に含まれ、「トークンはghp_...」のように日本語と隣接したトークンの前後で `\b` が境界にならず、検出できないため。
 
