@@ -8,7 +8,7 @@
     {
       "name": "inumberx-skills",
       "source": "./",
-      "description": "全スキルを一括導入する全部入りプラグイン(create-pr / create-skill / hand-off-context / investigate-failure / record-lesson / rename-or-delete / review-pr / write-commit)。review-pr にはフレームワーク/プラットフォーム由来のセキュリティ観点も同梱する。個別に選びたい場合は各スキル名のプラグインを使う。",
+      "description": "全スキルを一括導入する全部入りプラグイン(create-pr / create-skill / hand-off-context / investigate-failure / record-lesson / rename-or-delete / review-pr / verify-completion / write-commit)。review-pr にはフレームワーク/プラットフォーム由来のセキュリティ観点も同梱する。個別に選びたい場合は各スキル名のプラグインを使う。",
       "author": {
         "name": "InumberX"
       },
@@ -84,6 +84,16 @@
       },
       "category": "development",
       "tags": ["review", "code-review", "pull-request", "quality", "security"]
+    },
+    {
+      "name": "verify-completion",
+      "source": "./skills/verify-completion",
+      "description": "「直した」「完了した」と報告する前に、変更が影響しうる範囲(使っている側・対になる要素・画面幅などの条件)を挙げ、実体を見て確かめる。Storybook での並べ比べ、computed style、375px での横はみ出し、Markdown の描画結果、リダイレクト回数、未定義の CSS 変数などの確かめ方を持ち、結果を確認済み・未実行・未再現に分けて報告する。",
+      "author": {
+        "name": "InumberX"
+      },
+      "category": "development",
+      "tags": ["verification", "qa", "ui", "workflow"]
     },
     {
       "name": "write-commit",
