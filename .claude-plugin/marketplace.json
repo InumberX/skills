@@ -8,7 +8,7 @@
     {
       "name": "inumberx-skills",
       "source": "./",
-      "description": "全スキルを一括導入する全部入りプラグイン(create-pr / create-skill / hand-off-context / record-lesson / rename-or-delete / review-pr / write-commit)。review-pr にはフレームワーク/プラットフォーム由来のセキュリティ観点も同梱する。個別に選びたい場合は各スキル名のプラグインを使う。",
+      "description": "全スキルを一括導入する全部入りプラグイン(create-pr / create-skill / hand-off-context / investigate-failure / record-lesson / rename-or-delete / review-pr / write-commit)。review-pr にはフレームワーク/プラットフォーム由来のセキュリティ観点も同梱する。個別に選びたい場合は各スキル名のプラグインを使う。",
       "author": {
         "name": "InumberX"
       },
@@ -44,6 +44,16 @@
       },
       "category": "development",
       "tags": ["handoff", "context", "codex", "workflow"]
+    },
+    {
+      "name": "investigate-failure",
+      "source": "./skills/investigate-failure",
+      "description": "CI の失敗・テストの失敗・特定の環境でだけ起きる不具合・表示されないもの・数値のずれ・性能の変化を、コードを直す前に調べる。何がどこで失敗したか(ステップ・コミット・環境・ホスト)を確定し、再現させ、条件を 1 つずつ変えて絞り込み、除外した候補も含めて報告する。",
+      "author": {
+        "name": "InumberX"
+      },
+      "category": "development",
+      "tags": ["debugging", "ci", "investigation", "workflow"]
     },
     {
       "name": "record-lesson",
