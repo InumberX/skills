@@ -78,7 +78,7 @@
     {
       "name": "review-pr",
       "source": "./skills/review-pr",
-      "description": "プロジェクト横断のコードレビュー手順と出力フォーマットの骨格。スタイル・命名などの観点は各リポジトリの .claude/skills 側に置き、フレームワーク/プラットフォーム由来のセキュリティ観点 (rules/security/) のみ同梱する。",
+      "description": "プロジェクト横断のコードレビュー手順と出力フォーマットの骨格。スタイル・命名などの観点は各リポジトリの .claude/skills 側に置き、フレームワーク/プラットフォーム由来のセキュリティ観点 (rules/security/) と、レビューの進め方 (rules/process.md。指摘の根拠の確かめ方・レビューの範囲) のみ同梱する。",
       "author": {
         "name": "InumberX"
       },

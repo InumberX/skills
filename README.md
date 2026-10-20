@@ -57,7 +57,7 @@ skills/
 
 インストールしたスキルは自動発見・自動発動され、スラッシュ形式では `/review-pr` のように呼び出せる。配布しているプラグインは、全部入りの `inumberx-skills` と、個別の `create-pr` / `create-skill` / `hand-off-context` / `investigate-failure` / `record-lesson` / `rename-or-delete` / `review-pr` / `verify-completion` / `write-commit`。
 
-`review-pr` だけは例外的に観点本文(`rules/security/`)を同梱しており、フレームワーク・プラットフォーム由来のセキュリティ観点は取り込み先で追加設定なしに使える。スタイル・命名などの観点は従来どおり各プロジェクトの `.claude/skills/review-pr/rules/` に置く。
+`review-pr` だけは例外的に観点本文(`rules/security/`)と、レビューの進め方(`rules/process.md`)を同梱しており、フレームワーク・プラットフォーム由来のセキュリティ観点と、指摘の根拠の確かめ方は取り込み先で追加設定なしに使える。スタイル・命名などの観点は従来どおり各プロジェクトの `.claude/skills/review-pr/rules/` に置く。
 
 > **一括と個別はどちらか一方を選ぶ。** 両方入れると同じスキルが二重にロードされる（名前空間が別々なので壊れはしないが冗長）。
 >

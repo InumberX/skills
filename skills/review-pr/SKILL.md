@@ -1,13 +1,13 @@
 ---
 name: review-pr
-description: "Review a pull request against a project's style, naming, and structural conventions, and against framework- and platform-level security checks scoped to the changed files. Use when the user asks for a PR review, code review, or review of pending changes — including narrowed-scope requests like 'review the styling', 'check the naming', or 'check these changes for security issues'. Provides the cross-project review procedure and output format; style rules live in each project's own .claude/skills/review-pr/rules/, while the security rules ship with this skill."
+description: "Review a pull request against a project's style, naming, and structural conventions, and against framework- and platform-level security checks scoped to the changed files. Use when the user asks for a PR review, code review, or review of pending changes — including narrowed-scope requests like 'review the styling', 'check the naming', or 'check these changes for security issues'. Provides the cross-project review procedure and output format; style rules live in each project's own .claude/skills/review-pr/rules/, while the security rules and the review process rules (checking library behavior against the project's installed version, identifying same-name functions by path and signature, confirming who handles user-submitted data, staying within the requested scope) ship with this skill."
 ---
 
 # review-pr
 
 複数プロジェクトで共通のコードレビュー手順・出力フォーマットを提供するスキルの**骨格**。手順・重要度分類・拡張ガイドはどのプロジェクトでも同じなので中央に置き、**具体的なレビュー観点（命名・CSS・構造などの規約本文）は各プロジェクトの `.claude/skills/review-pr/rules/` に置く**。
 
-例外はセキュリティ観点で、これだけは `rules/security/` として本スキルに同梱している。参照するのがフレームワーク・プラットフォームの規定する識別子とファイル名（`ssr`・`define`・`run_worker_first` のような設定キー、`next.config.*`・`proxy.ts` / `middleware.ts` のようなファイル名など、どのリポジトリでも同じ名前になるもの）だけで、**そのリポジトリ固有のパス・識別子を引用しない**ため中央で保守できる。
+例外はセキュリティ観点で、観点本文のうちこれだけは `rules/security/` として本スキルに同梱している。参照するのがフレームワーク・プラットフォームの規定する識別子とファイル名（`ssr`・`define`・`run_worker_first` のような設定キー、`next.config.*`・`proxy.ts` / `middleware.ts` のようなファイル名など、どのリポジトリでも同じ名前になるもの）だけで、**そのリポジトリ固有のパス・識別子を引用しない**ため中央で保守できる。
 
 機械的に検出できる項目（フォーマット、未使用変数、`any` 禁止、import 順序、フック依存配列など）は各プロジェクトの `lint`・`format`・`typecheck` に任せ、本スキルは**人間の判断が必要なルール**にフォーカスする。
 
@@ -27,6 +27,7 @@ description: "Review a pull request against a project's style, naming, and struc
 | レビュー手順・出力フォーマット・拡張ガイド（本ファイル） | 本リポジトリ（横断・不変の骨格） |
 | 実際のレビュー観点（命名・CSS・構造などの規約本文と例） | 各プロジェクトの `.claude/skills/review-pr/rules/`・`examples/` |
 | セキュリティ観点（フレームワーク・プラットフォーム由来） | 本リポジトリの `rules/security/`（本スキルに同梱） |
+| レビューの進め方（指摘の根拠の確かめ方・範囲） | 本リポジトリの `rules/process.md`（本スキルに同梱。観点ではない） |
 
 各プロジェクトはスタイル基盤（例: CSS Modules と Vanilla Extract）やディレクトリ規約が異なるため、`rules/` の中身は完全に別物になる。**本ファイルをプロジェクトへ取り込む際は、そのプロジェクトの `rules/` を必ず用意する**（同梱の `rules/security/` を除き、骨格だけでは観点が空になる）。
 
@@ -76,6 +77,8 @@ GitHub Actions とレスポンスヘッダは、対応する依存パッケー�
 
 ### 3. ルールの読み込みとレビュー
 
+指摘を書く前に、本スキルの `rules/process.md`（レビューの進め方。常に読む）を読む。ライブラリの挙動を根拠にするときの確かめ方、同名の関数の同定、ユーザー入力を受け取る機能で先に確かめること、レビューの範囲を扱う。
+
 選択したルールファイルを実際に読み、差分の各ファイルに対してルール違反を検出する。**ルールを推測で適用せず、必ずファイルから引用して根拠を示す。** 判断に迷ったらプロジェクトの `examples/` と既存コードを参照する。
 
 #### セキュリティ観点の扱い
@@ -116,6 +119,10 @@ GitHub Actions とレスポンスヘッダは、対応する依存パッケー�
 ### ✅ 良かった点
 
 - 規約に正しく従えている点を挙げる。
+
+### 📎 範囲外で気づいたこと
+
+- 範囲を指定されたレビューで、範囲の外に見つけたもの。範囲の指定が無ければセクションごと省く。
 ````
 
 ## 出力上の注意
@@ -134,6 +141,7 @@ GitHub Actions とレスポンスヘッダは、対応する依存パッケー�
 - 例外は `rules/security/` で、ここだけは本リポジトリに観点本文を置く。線引きは「何を引用するか」で判断する。**フレームワーク・プラットフォームが規定する識別子とファイル名までなら中央**（`ssr`・`run_worker_first` のような設定キー、`next.config.*`・`proxy.ts` / `middleware.ts`・`route.ts` のような公式に名前が決まっているファイル。どのリポジトリでも同じ名前になり、そのリポジトリの都合では変わらない。世代によって改称されたものは両方を併記する）。**そのリポジトリにしか存在しないパス・識別子（コンポーネント名、独自に切ったサーバーモジュールのパスなど）を引用するならプロジェクト側。** プロジェクト固有の不変条件（このリポジトリのこのファイルがこの前提を守っている、という類）は中央に書かない
 - **`rules/security/` にフレームワーク別ファイルを足すとき**（`nextjs.md`・`react-router.md` など）は、冒頭に対象バージョンを明記し、範囲外は「未検証」と書く。フレームワークの世代交代で内容が陳腐化しても、配布先からは古さが見えないため。同じフレームワークでも設定（SSR の有無など）で結論が反転するものは、フレームワーク名ではなく設定値で分岐させて書く
 - **`rules/security/` にファイルを足したら**「観点の選択」の検出条件テーブルにも行を足す。検出条件が書かれていないファイルは読まれない。検出条件は**依存パッケージ**で書く（設定ファイルは省略可能なことが多く、取りこぼす）。ただしパッケージ名は**そのルールが対象とする使い方に固有のもの**を選ぶ。広く使われるパッケージ名を条件にすると、対象外の構成まで拾って全項目が空振りする（例: `react-router` は library mode でも入るので framework mode の判定に使えない）。依存だけで区別できない場合は、ディレクトリの有無など補助条件を注記する。対応する依存パッケージが存在しない対象（GitHub Actions など、定義ファイルそのものが検査対象になるもの）はファイルの有無で判定してよいが、その理由をテーブルの下に書く
+- **`rules/process.md` はレビューの進め方**（根拠の確かめ方・範囲）を扱い、観点本文とは分ける。プロジェクトやフレームワークに依存しない進め方の規則だけを置き、特定の観点に属する内容は観点のファイルへ書く
 - **`boundary.md` は常に読まれる**ため、フレームワーク別ファイルと必ず同時に読まれる。同じ論点を両方に詳しく書かず、`boundary.md` に原則、フレームワーク別に具体的な機構と見つけ方を置く（`writing.md`「ファイルを増やすのは、読み込み単位を分けたいときだけ」）
 - **手順・出力フォーマット・重要度分類そのものを変えるとき**は本ファイルを更新する。骨格の変更は全プロジェクトへ影響するため、取り込み済みプロジェクトとの整合を確認する
 - 同じ観点が複数プロジェクトの `rules/` で実質同一になったら、その観点の共通部分も本リポジトリへ昇格できないか検討する（判断基準は `../create-skill/rules/placement.md`）
