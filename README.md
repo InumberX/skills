@@ -55,7 +55,7 @@ skills/
 /plugin marketplace update inumberx-skills
 ```
 
-インストールしたスキルは自動発見・自動発動され、スラッシュ形式では `/review-pr` のように呼び出せる。配布しているプラグインは、全部入りの `inumberx-skills` と、個別の `create-pr` / `create-skill` / `hand-off-context` / `review-pr` / `write-commit`。
+インストールしたスキルは自動発見・自動発動され、スラッシュ形式では `/review-pr` のように呼び出せる。配布しているプラグインは、全部入りの `inumberx-skills` と、個別の `create-pr` / `create-skill` / `hand-off-context` / `rename-or-delete` / `review-pr` / `write-commit`。
 
 `review-pr` だけは例外的に観点本文(`rules/security/`)を同梱しており、フレームワーク・プラットフォーム由来のセキュリティ観点は取り込み先で追加設定なしに使える。スタイル・命名などの観点は従来どおり各プロジェクトの `.claude/skills/review-pr/rules/` に置く。
 
