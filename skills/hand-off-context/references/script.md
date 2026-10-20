@@ -33,8 +33,8 @@ python3 <このスキルのディレクトリ>/scripts/handoff_tool.py <サブ�
 | `changed-files [--limit N]` | `git status` から Changed Files の表を出力する。Description 列は空 | export 3 |
 | `scan FILE [--redact]` | 秘密情報を検出し、行番号・セクション・種類を出力する。値そのものは出力しない。`--redact` で該当箇所を `[REDACTED]` に置き換える | export 5 |
 | `validate [FILE]` | Handoff File を検証し、要約を出力する。FILE を省くと `.handoff/handoff.md` と `metadata.json` を対象にする | import 2、status |
-| `publish DRAFT` | DRAFT を検証し、現在の `handoff.md` を `history/` へ退避してから DRAFT に置き換え、`metadata.json` を `ready` にする。DRAFT が `.handoff/draft.md` なら最後に削除する | export 6 |
-| `mark --status imported --agent NAME` / `mark --status invalid` | `metadata.json` に import の結果を書く | import 4 |
+| `publish DRAFT` | DRAFT を検証し、現在の `handoff.md` を `history/` へ退避してから DRAFT に置き換え、`metadata.json` を `ready` にする。DRAFT が `.handoff/draft.md` なら最後に削除する。秘密情報らしいものがあれば WARNING を出す（拒否はしない） | export 6 |
+| `mark --status imported --agent NAME` / `mark --status invalid` | `metadata.json` に import の結果を書く。`handoff.md` がなければ何も書かずに拒否する | import 4 |
 | `clear [--history \| --keep N] [--yes]` | 削除対象を一覧にする。`--yes` を付けたときだけ削除する | clear |
 
 ## 終了コード
@@ -51,8 +51,15 @@ python3 <このスキルのディレクトリ>/scripts/handoff_tool.py <サブ�
 | --- | --- |
 | `the draft is not a valid Handoff File` | 下書きの frontmatter が不正。続けて出る `ERROR` を直す |
 | `the draft reuses the current handoff_id` | 下書きの `handoff_id` が現在の引き継ぎと同じ。`info` で新しい値を取り直す |
-| `... already exists` | 退避先の履歴ファイルがすでにある。上書きせずユーザーに伝える |
+| `handoff_id ... is not YYYYMMDDTHHMMSSZ-xxxx` | 下書きの `handoff_id` の形式が違う。履歴のファイル名に使うため、`validate` と違って警告ではなく拒否する。`info` で新しい値を取り直す |
+| `... already exists` | 退避先の履歴ファイルがすでにある。上書きせずユーザーに伝える（次節） |
+
+## 退避先がすでにある場合
+
+`publish` は、履歴への退避を終えた後で置き換えに失敗することがある（ディスクの空き不足など）。このとき `history/` には退避したファイルが残り、`handoff.md` は元のままなので、再実行すると `already exists` で拒否される。
+
+その履歴ファイルの中身が現在の `handoff.md` と同じかを確かめ、同じなら、ユーザーの確認を得てから履歴ファイルを削除して再実行する。違う場合は、どちらを残すかをユーザーに尋ねる。
 
 ## 書き込みの安全性
 
-`publish`・`mark`・`scan --redact` は、同じディレクトリの一時ファイルに書いてから置き換える。途中で失敗しても、元のファイルが半端な内容で残ることはない。
+`publish`・`mark`・`scan --redact` は、同じディレクトリの一時ファイルに書いてから置き換える。途中で失敗しても、元のファイルが半端な内容で残ることはない。置き換えるファイルの権限と改行コード（LF / CRLF）はそのまま保つ。先頭に BOM があるファイルも読める。

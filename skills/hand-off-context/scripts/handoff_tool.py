@@ -30,6 +30,7 @@ import json
 import os
 import re
 import secrets
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -101,18 +102,19 @@ SECRET_PATTERNS: tuple[tuple[str, str], ...] = (
 SECRET_ASSIGNMENT = (
     "secret-assignment",
     r"(?i)\b[\w.-]*(?:password|passwd|secret|token|api_key|apikey|private_key|credential)"
-    r"[\w.-]*[\"']?[ \t]*[:=][ \t]*[\"']?(?P<value>[^\s\"',;]+)",
+    r"[\w.-]*[\"']?[ \t]*[:=][ \t]*[\"']?(?P<value>[^\s\"',;\u3000、。]+)",
 )
 PRIVATE_KEY_BLOCK = re.compile(
     r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?(?:-----END [A-Z ]*PRIVATE KEY-----|\Z)", re.S
 )
 # Values that are clearly not secrets: placeholders, references to the
-# environment, and values already masked.
+# environment, values already masked, and plain numbers (`max_tokens: 1024`).
 PLACEHOLDER = re.compile(
     r"^(?:x+|\*+|\.{3}|<[^>]*>|\$\{?\w+\}?|process\.env\.\w+|os\.environ\S*|env\.\w+"
-    r"|\[REDACTED\]|none|null|unknown|true|false|undefined)$",
+    r"|\[REDACTED\]|none|null|unknown|true|false|undefined|\d+(?:\.\d+)?)$",
     re.I,
 )
+FRONTMATTER_BLOCK = re.compile(r"\A\ufeff?---[ \t]*\r?\n.*?^---[ \t]*\r?$", re.S | re.M)
 
 
 # --------------------------------------------------------------------------
@@ -157,13 +159,17 @@ def atomic_write(path: Path, text: str) -> None:
     """Write text to path via a temporary file in the same directory.
 
     os.replace is atomic on POSIX and Windows when source and target share a
-    filesystem, so a reader never sees a half-written file.
+    filesystem, so a reader never sees a half-written file. Line endings are
+    written as given, and an existing file keeps its permissions (mkstemp
+    creates the temporary file as 0600).
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
     try:
-        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as fh:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as fh:
             fh.write(text)
+        if path.exists():
+            shutil.copymode(path, tmp)
         os.replace(tmp, path)
     except BaseException:
         Path(tmp).unlink(missing_ok=True)
@@ -171,7 +177,9 @@ def atomic_write(path: Path, text: str) -> None:
 
 
 def read_text(path: Path) -> str:
-    return path.read_text(encoding="utf-8")
+    # newline="" keeps CRLF as is, so rewriting a file does not change its line endings.
+    with path.open(encoding="utf-8", newline="") as fh:
+        return fh.read()
 
 
 # --------------------------------------------------------------------------
@@ -192,7 +200,8 @@ class Report:
 
 def split_frontmatter(text: str) -> tuple[list[str], str] | None:
     """Return (frontmatter lines, body) or None if the block is missing."""
-    lines = text.splitlines()
+    # Some Windows editors and older PowerShell write a UTF-8 byte order mark.
+    lines = text.removeprefix("\ufeff").splitlines()
     if not lines or lines[0].strip() != "---":
         return None
     for i in range(1, len(lines)):
@@ -304,7 +313,10 @@ def check_sections(body: str, kind: object, report: Report) -> None:
 
 
 def section_items(body: str, title: str) -> list[str]:
-    """Bullet or numbered items directly under the `### title` heading."""
+    """Top-level bullet or numbered items under the `### title` heading.
+
+    Indented items are details of the item above them, not separate tasks.
+    """
     items: list[str] = []
     inside = False
     for line in body.splitlines():
@@ -313,7 +325,7 @@ def section_items(body: str, title: str) -> list[str]:
             inside = match.group(2) == title
             continue
         if inside:
-            item = re.match(r"^\s*(?:[-*+]|\d+[.)])\s+(.*\S)", line)
+            item = re.match(r"^(?:[-*+]|\d+[.)])\s+(.*\S)", line)
             if item and item.group(1).strip() not in ("None", UNKNOWN):
                 items.append(item.group(1).strip())
     return items
@@ -482,7 +494,9 @@ class Finding:
 def find_secrets(text: str) -> list[Finding]:
     spans: list[Finding] = []
     for kind, pattern in (*SECRET_PATTERNS, SECRET_ASSIGNMENT):
-        for match in re.finditer(pattern, text):
+        # ASCII mode: in Unicode mode Japanese letters count as \w, so `\b` finds no
+        # boundary in "トークンはghp_..." and the token would go undetected.
+        for match in re.finditer(pattern, text, re.ASCII):
             if "value" in match.re.groupindex:
                 if PLACEHOLDER.match(match.group("value")):
                     continue
@@ -510,7 +524,10 @@ def redact(text: str, findings: list[Finding]) -> str:
 
 
 def section_of(text: str, offset: int) -> str:
-    title = "(frontmatter)"
+    block = FRONTMATTER_BLOCK.match(text)
+    if block and offset < block.end():
+        return "(frontmatter)"
+    title = "(before the first heading)"
     for match in re.finditer(r"^#{1,6}\s+(.*?)\s*$", text[:offset], re.M):
         title = match.group(1)
     return title
@@ -627,6 +644,12 @@ def cmd_publish(args: argparse.Namespace) -> int:
         return 1
 
     new_id = str(data["handoff_id"])
+    # The id becomes a file name under history/; anything but the documented
+    # shape could point outside it (e.g. "../../x").
+    if not HANDOFF_ID.match(new_id):
+        print(f"refused: handoff_id {new_id!r} is not YYYYMMDDTHHMMSSZ-xxxx; nothing was changed")
+        print("run `info` to get a new handoff_id")
+        return 1
     current = handoff_dir / HANDOFF_FILE
     archive: Path | None = None
     current_text: str | None = None
@@ -651,6 +674,14 @@ def cmd_publish(args: argparse.Namespace) -> int:
             print(f"refused: {archive} already exists; nothing was changed")
             return 1
 
+    draft_text = read_text(draft)
+    for finding in find_secrets(draft_text):
+        # A safety net for a skipped `scan`; not a refusal, since some findings are false positives.
+        report.warnings.append(
+            f"possible secret on line {finding.line} [{section_of(draft_text, finding.start)}]:"
+            f" {finding.kind}; run `scan` to review it"
+        )
+
     print_report(report)
     gitignore = handoff_dir / ".gitignore"
     if not gitignore.exists():
@@ -658,7 +689,7 @@ def cmd_publish(args: argparse.Namespace) -> int:
     if archive is not None and current_text is not None:
         atomic_write(archive, current_text)
         print(f"archived the previous handoff to {archive.relative_to(root).as_posix()}")
-    atomic_write(current, read_text(draft))
+    atomic_write(current, draft_text)
     atomic_write(handoff_dir / METADATA_FILE, metadata_document(new_id, "ready", None, None))
     if draft.resolve().parent == handoff_dir.resolve() and draft.name == DRAFT_FILE:
         draft.unlink()
@@ -669,7 +700,15 @@ def cmd_publish(args: argparse.Namespace) -> int:
 def cmd_mark(args: argparse.Namespace) -> int:
     root = find_root(args.root)
     handoff_dir = root / HANDOFF_DIR
-    data, _body, _report = load_handoff(handoff_dir / HANDOFF_FILE)
+    current = handoff_dir / HANDOFF_FILE
+    # Without a handoff there is nothing to mark, and writing metadata.json alone
+    # would create .handoff/ without its .gitignore.
+    if not current.is_file():
+        print(
+            f"refused: {current.relative_to(root).as_posix()} does not exist; nothing was changed"
+        )
+        return 1
+    data, _body, _report = load_handoff(current)
     handoff_id = data.get("handoff_id")
     if not isinstance(handoff_id, str) or not handoff_id:
         handoff_id = UNKNOWN

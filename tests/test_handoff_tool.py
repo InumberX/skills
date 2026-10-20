@@ -15,6 +15,7 @@ import contextlib
 import importlib.util
 import io
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -94,6 +95,11 @@ class TestFrontmatter(unittest.TestCase):
         self.assertIs(data["dirty"], False)
         self.assertEqual(data["created_at"], "2026-10-20T01:00:00Z")
 
+    def test_byte_order_mark_is_ignored(self):
+        data, report = self.report_for("\ufeff" + handoff())
+        self.assertEqual(report.errors, [])
+        self.assertEqual(data["kind"], "handoff")
+
     def test_missing_block(self):
         self.assertIsNone(handoff_tool.split_frontmatter("# Handoff\n"))
         self.assertIsNone(handoff_tool.split_frontmatter("---\nkind: x\n"))
@@ -164,6 +170,10 @@ class TestSections(unittest.TestCase):
     def test_headings_inside_code_fences_do_not_count(self):
         text = handoff().replace("## Next Actions\n", "```text\n## Next Actions\n```\n")
         self.assertTrue(any("Next Actions" in w for w in self.check(text).warnings))
+
+    def test_section_items_count_top_level_only(self):
+        body = "### In Progress\n\n- a\n  - detail 1\n  - detail 2\n- b\n"
+        self.assertEqual(handoff_tool.section_items(body, "In Progress"), ["a", "b"])
 
     def test_section_items_skip_none(self):
         body = "### Pending\n\n- one\n- None\n1. two\n\n## Other\n\n- three\n"
@@ -277,6 +287,14 @@ class TestSecrets(unittest.TestCase):
             with self.subTest(kind=kind):
                 self.assertEqual(self.kinds(f"value {sample} end"), [kind])
 
+    def test_tokens_next_to_japanese_text(self):
+        token = "ghp_" + "a" * 36
+        self.assertEqual(self.kinds(f"トークンは{token}です"), ["github-token"])
+        text = "password=hunter2xyz。次に"
+        self.assertEqual(
+            handoff_tool.redact(text, handoff_tool.find_secrets(text)), "password=[REDACTED]。次に"
+        )
+
     def test_overlap_reports_once(self):
         self.assertEqual(self.kinds("sk-ant-" + "a" * 30), ["anthropic-api-key"])
 
@@ -291,6 +309,15 @@ class TestSecrets(unittest.TestCase):
         self.assertEqual(
             redacted, "STRIPE_SECRET_KEY=[REDACTED]\nurl postgres://user:[REDACTED]@db/x\n"
         )
+
+    def test_plain_numbers_are_ignored(self):
+        self.assertEqual(self.kinds("max_tokens: 1024\nTOKEN_LIMIT=4096\nratio: 0.5\n"), [])
+
+    def test_section_labels(self):
+        text = handoff()
+        self.assertEqual(handoff_tool.section_of(text, text.index("kind")), "(frontmatter)")
+        self.assertEqual(handoff_tool.section_of(text, text.index("## Notes") + 9), "Notes")
+        self.assertEqual(handoff_tool.section_of("plain text", 3), "(before the first heading)")
 
     def test_placeholders_are_ignored(self):
         for value in ("xxx", "<your-token>", "${TOKEN}", "process.env.TOKEN", "[REDACTED]"):
@@ -312,6 +339,19 @@ class TestSecrets(unittest.TestCase):
 
 
 class TestScanCommand(TempDirTest):
+    def test_redact_keeps_line_endings(self):
+        path = self.write("crlf.md", "x\r\npassword=hunter2xyz\r\n")
+        path.write_bytes(b"x\r\npassword=hunter2xyz\r\n")
+        run("scan", str(path), "--redact")
+        self.assertEqual(path.read_bytes(), b"x\r\npassword=[REDACTED]\r\n")
+
+    @unittest.skipIf(os.name == "nt", "POSIX permission bits")
+    def test_redact_keeps_permissions(self):
+        path = self.write("run.sh", "#!/bin/sh\npassword=hunter2xyz\n")
+        path.chmod(0o755)
+        run("scan", str(path), "--redact")
+        self.assertEqual(path.stat().st_mode & 0o777, 0o755)
+
     def test_scan_reports_without_values_and_redacts(self):
         secret = "ghp_" + "z" * 36
         path = self.write("draft.md", f"# Handoff\n\n## Notes\n\ntoken is {secret}\n")
@@ -369,6 +409,22 @@ class TestPublishAndMark(TempDirTest):
         archived = self.handoff_dir / "history" / "20261020T010000Z-aaaa.md"
         self.assertEqual(archived.read_text(), "keep\n")
 
+    def test_malformed_id_is_refused(self):
+        self.write(".handoff/handoff.md", "broken\n")
+        code, out = self.publish(handoff("../../../escaped"))
+        self.assertEqual(code, 1)
+        self.assertIn("refused", out)
+        self.assertEqual((self.handoff_dir / "handoff.md").read_text(), "broken\n")
+        written = {p.relative_to(self.root).as_posix() for p in self.root.rglob("*") if p.is_file()}
+        self.assertEqual(written, {".handoff/handoff.md", ".handoff/draft.md"})
+
+    def test_publish_warns_about_secrets_but_publishes(self):
+        text = handoff().replace("補足があれば書く。", "token ghp_" + "q" * 36)
+        code, out = self.publish(text)
+        self.assertEqual(code, 0)
+        self.assertIn("possible secret", out)
+        self.assertNotIn("q" * 36, out)
+
     def test_unreadable_current_is_archived_as_invalid(self):
         self.write(".handoff/handoff.md", "broken\n")
         self.assertEqual(self.publish(handoff("20261020T020000Z-bbbb"))[0], 0)
@@ -385,6 +441,11 @@ class TestPublishAndMark(TempDirTest):
         self.assertEqual(metadata["status"], "imported")
         self.assertEqual(metadata["imported_by"], "codex")
         self.assertRegex(metadata["imported_at"], handoff_tool.ISO_8601)
+
+    def test_mark_without_handoff_changes_nothing(self):
+        code, _out = run("mark", "--status", "invalid", "--root", str(self.root))
+        self.assertEqual(code, 1)
+        self.assertFalse(self.handoff_dir.exists())
 
     def test_mark_imported_requires_agent(self):
         self.assertEqual(run("mark", "--status", "imported", "--root", str(self.root))[0], 2)

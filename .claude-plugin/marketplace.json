@@ -38,7 +38,7 @@
     {
       "name": "hand-off-context",
       "source": "./skills/hand-off-context",
-      "description": "AI コーディングエージェント間(Claude Code ⇄ Codex など)で、.handoff/handoff.md を介して開発コンテキストを引き継ぐ。export でタスク・進捗・設計判断・変更ファイル・検証結果を書き出し、import で Git の状態と照合して読み込む。",
+      "description": "AI コーディングエージェント間(Claude Code ⇄ Codex など)で、.handoff/handoff.md を介して開発コンテキストを引き継ぐ。export でタスク・進捗・設計判断・変更ファイル・検証結果を書き出し、import で Git の状態と照合して読み込む。status / diff / clear で状態の確認・変化の表示・削除を行い、Python があれば標準ライブラリのみの補助スクリプトで検証・秘密情報の検出・安全な書き込みを行う。",
       "author": {
         "name": "InumberX"
       },
