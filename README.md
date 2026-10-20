@@ -94,7 +94,7 @@ CI（`.github/workflows/validate.yml`）で自動実行する。ローカルで�
 | SKILL.md の frontmatter | `python3 scripts/validate_skills.py` | `name` / `description` の有無、ケバブケース、ディレクトリ名との一致、ダブルクォート |
 | マーケットプレイス | `python3 scripts/validate_marketplace.py` | `marketplace.json` と `skills/` の同期 |
 | 日本語の括弧 | `python3 scripts/validate_text.py` | 日本語を囲む半角括弧、全角と半角が対応していない括弧 |
-| ユニットテスト | `python3 -m unittest discover -s tests -p "test_*.py"` | 上記バリデータのテスト |
+| ユニットテスト | `python3 -m unittest discover -s tests -p "test_*.py"` | 上記バリデータと、`hand-off-context` の補助スクリプト（`scripts/handoff_tool.py`）のテスト |
 | Markdown の構造 | `npm run lint-markdown` | 見出し・テーブル・コードフェンスの記法（markdownlint） |
 | 日本語の文章 | `npm run lint-text` | 箇条書きの句点統一など（textlint） |
 | Python | `ruff check` / `ruff format --check` | lint と整形 |
@@ -103,7 +103,7 @@ CI（`.github/workflows/validate.yml`）で自動実行する。ローカルで�
 
 textlint のルール名は**報告される ID と完全に一致させる**。1文字でも違うと一致せず、無効化したつもりのルールが有効なまま残る。設定を変えたら `npx textlint --print-config` で実際に外れたかを確認すること。
 
-Node の依存は文章検査のためだけにあり、スキル本体は Markdown のみで動く。
+Node の依存は文章検査のためだけにあり、スキル本体は Markdown のみで動く。`hand-off-context` の補助スクリプトは Python がある環境でだけ使う任意のもので、標準ライブラリしか使わない。
 
 検査対象の glob は `.markdownlint-cli2.jsonc` の `globs`、`package.json` の `lint-text`、`scripts/validate_text.py` の `TARGETS` の3箇所にある。textlint は対象を設定ファイルに書けないため一元化できていない。**対象を変えるときは3箇所そろえる。** 揃っていないと、そのツールだけ検査せずに成功として通る。
 

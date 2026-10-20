@@ -17,19 +17,21 @@ export で書き出す前に、内容に秘密情報が含まれていないか�
 | 種類 | パターン（正規表現） |
 | --- | --- |
 | 秘密鍵 | `-----BEGIN [A-Z ]*PRIVATE KEY-----` |
-| AWS アクセスキー | `\b(AKIA\|ASIA)[0-9A-Z]{16}\b` |
-| GitHub トークン | `\b(ghp\|gho\|ghu\|ghs\|ghr)_[A-Za-z0-9]{36,}\b`、`\bgithub_pat_[A-Za-z0-9_]{22,}\b` |
+| AWS アクセスキー | `\b(?:AKIA\|ASIA)[0-9A-Z]{16}\b` |
+| GitHub トークン | `\b(?:ghp\|gho\|ghu\|ghs\|ghr)_[A-Za-z0-9]{36,}\b`、`\bgithub_pat_[A-Za-z0-9_]{22,}\b` |
 | Anthropic API キー | `\bsk-ant-[A-Za-z0-9_-]{20,}` |
-| OpenAI API キー | `\bsk-(proj-)?[A-Za-z0-9_-]{20,}` |
+| OpenAI API キー | `\bsk-(?:proj-)?[A-Za-z0-9_-]{20,}` |
 | Slack トークン | `\bxox[abprs]-[A-Za-z0-9-]{10,}` |
 | Google API キー | `\bAIza[0-9A-Za-z_-]{35}\b` |
 | JWT | `\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}` |
-| 認証情報付きの URL | `[a-z][a-z0-9+.-]*://[^/\s:@]+:[^/\s@]+@` |
+| 認証情報付きの URL | `[a-z][a-z0-9+.-]*://[^/\s:@]+:(?P<value>[^/\s@]+)@` |
 | 秘密らしいキーへの代入 | キー名に `password`・`passwd`・`secret`・`token`・`api_key`・`apikey`・`private_key`・`credential` を含み（大文字小文字を区別しない）、`=` または `:` の後に値があるもの |
 
 最後の 2 つは誤検出が多い。値がプレースホルダ（`xxx`・`<your-token>`・`${TOKEN}`・`process.env.TOKEN` など）なら置き換えなくてよい。
 
-表の中の `\|` は、Markdown の表を壊さないためにエスケープした `|`（どれか 1 つに一致）である。
+表の中の `\|` は、Markdown の表を壊さないためにエスケープした `|`（どれか 1 つに一致）である。`(?P<value>...)` は、置き換える範囲を値の部分だけに絞るための名前付きグループである。
+
+`scripts/handoff_tool.py` の `SECRET_PATTERNS` は、この表と同じ正規表現を持つ（ユニットテストで一致を確かめている）。パターンを変えるときは両方を同時に更新する。
 
 ## 見つけたときの扱い
 

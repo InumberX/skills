@@ -2,6 +2,8 @@
 
 現在のコンテキストを `.handoff/handoff.md` に書き出す。雛形は `templates/handoff.md`、各項目の定義は `references/handoff-schema.md` にある。
 
+Python 3.10 以上を使える場合は、手順 3〜6 の一部を `scripts/handoff_tool.py` に任せる（使い方は `references/script.md`）。各手順の「スクリプトを使う場合」に書いた部分だけを置き換え、それ以外は手作業と同じに進める。
+
 ## 1. 前回の引き継ぎを読む
 
 `.handoff/handoff.md` があれば先に読む。
@@ -31,6 +33,8 @@
 - `--kind review` のときは、Task にレビューの対象（ブランチ・コミット・範囲）を書き、指摘を `Review Findings` に、修正の順序を `Next Actions` に書く
 
 ## 3. Git の状態を取得する
+
+**スクリプトを使う場合**：`handoff_tool.py info` が `project`・`branch`・`commit`・`dirty` を、`handoff_tool.py changed-files` が Changed Files の表を出力する。表の Description 列は空なので、下の「Description は」の項に従って埋める。標準エラーに「more file(s) not listed」と出たら、その件数を `Notes` に書く。以降のこの節の手順は不要になる。
 
 まず `git rev-parse --is-inside-work-tree` で Git リポジトリかを確かめる。失敗したら Git 管理外として、`branch`・`commit`・`dirty` を `"Unknown"`、`Changed Files` を `Unknown` にして先へ進む。
 
@@ -66,6 +70,8 @@ Git リポジトリなら、次のコマンドで取得する。
 
 ## 4. 日時と handoff_id を決める
 
+**スクリプトを使う場合**：手順 3 の `info` が出力した `created_at` と `handoff_id` をそのまま使う。
+
 現在の UTC 日時を取得する。
 
 | 環境 | コマンド |
@@ -83,7 +89,11 @@ InvariantCulture を指定するのは、ロケールによって `:` が別の�
 
 ここまでに整理した内容を `references/secret-patterns.md` に照らして確認する。該当箇所は `[REDACTED]` に置き換え、何件をどのセクションで置き換えたかを最後に報告する（値そのものは報告に書かない）。
 
+**スクリプトを使う場合**：新しい内容を `.handoff/draft.md` に書き、`handoff_tool.py scan .handoff/draft.md` を実行する。検出された行を確かめ、秘密情報なら `--redact` を付けて再実行する。誤検出だけなら置き換えずに先へ進む。スクリプトの検出は補助であり、パターンに当たらない秘密情報は自分で確かめる。
+
 ## 6. ファイルを書き出す
+
+**スクリプトを使う場合**：`handoff_tool.py publish .handoff/draft.md` を実行する。下書きを検証したうえで、下の 1〜5 を一時ファイル経由の置き換えで行い、`.handoff/draft.md` を削除する。終了コードが 1 なら何も変更されていないので、出力された理由を直して再実行する。
 
 エージェントのファイル操作ツールで、次の順に書く。
 
