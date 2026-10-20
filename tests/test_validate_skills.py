@@ -157,6 +157,21 @@ class TestCheck(unittest.TestCase):
         md = self.write_skill("do-thing", '---\nname: do-thing\ndescription: ""\n---\n')
         self.assert_error_contains(validate_skills.check(md), "`description` is missing")
 
+    def test_description_at_the_length_limit(self):
+        text = "x" * 1024
+        md = self.write_skill("do-thing", frontmatter("do-thing", f'description: "{text}"'))
+        self.assertEqual(validate_skills.check(md), [])
+
+    def test_description_over_the_length_limit(self):
+        text = "x" * 1025
+        md = self.write_skill("do-thing", frontmatter("do-thing", f'description: "{text}"'))
+        self.assert_error_contains(validate_skills.check(md), "the limit is 1024")
+
+    def test_name_over_the_length_limit(self):
+        name = "a" * 65
+        md = self.write_skill(name, frontmatter(name, 'description: "Do the thing."'))
+        self.assert_error_contains(validate_skills.check(md), "the limit is 64")
+
     def test_description_plain_scalar(self):
         md = self.write_skill("do-thing", "---\nname: do-thing\ndescription: plain text\n---\n")
         self.assert_error_contains(validate_skills.check(md), "double-quoted")

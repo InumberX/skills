@@ -26,6 +26,7 @@ Exit codes: 0 success, 1 problems found or the operation was refused,
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import re
@@ -102,7 +103,7 @@ SECRET_PATTERNS: tuple[tuple[str, str], ...] = (
 SECRET_ASSIGNMENT = (
     "secret-assignment",
     r"(?i)\b(?P<key>[\w.-]*(?:password|passwd|secret|token|api_key|apikey|private_key|credential)"
-    r"[\w.-]*)[\"']?[ \t]*[:=][ \t]*[\"'`]?(?P<value>[^\s\"',;\u3000、。]+)",
+    r"[\w.-]*)[\"']?[ \t]*[:=][ \t]*(?P<quote>[\"'`]?)(?P<value>[^\s\"',;\u3000、。]+)",
 )
 PRIVATE_KEY_BLOCK = re.compile(
     r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?(?:-----END [A-Z ]*PRIVATE KEY-----|\Z)", re.S
@@ -184,7 +185,10 @@ def atomic_write(path: Path, text: str) -> None:
         else:
             # A new file gets the same mode as one created by the agent's own
             # file tools, so .handoff/ does not mix 0600 and 0644 files.
-            os.chmod(tmp, 0o666 & ~current_umask())
+            # Best effort: some filesystems (network shares, FAT) refuse chmod,
+            # and the mode is not worth failing the write over.
+            with contextlib.suppress(OSError):
+                os.chmod(tmp, 0o666 & ~current_umask())
         os.replace(tmp, path)
     except BaseException:
         Path(tmp).unlink(missing_ok=True)
@@ -519,20 +523,62 @@ def is_token_count(match: re.Match[str], value: str) -> bool:
     return words == {"token"}
 
 
-def trim_value(value: str, punctuation: str = "") -> str:
-    """Drop characters that close the code around a value, not the value itself.
+SENTENCE_PUNCTUATION = ":.!?"
+# Closing characters that may belong to code around an assignment, with the
+# opener that must appear before the key for them to count as such.
+CODE_CLOSERS = {")": "(", "\uff09": "\uff08", "`": "`"}
 
-    `f(token=None)` and `` `token=None` `` end in a bracket or backtick that
-    belongs to the call or the code span. Only a trailing backtick, an
-    unbalanced trailing ")" and the given punctuation are dropped, so
-    `password=ab)cd1234` is masked whole; ending the value at the first ")"
-    would leave `cd1234` in the file.
+
+def assignment_span(text: str, match: re.Match[str]) -> tuple[int, int, str]:
+    """(start, end, bare) of the value in a `key=value` match.
+
+    start/end is the span to mask; bare is the value without trailing sentence
+    punctuation or code closers, used to decide whether it is a placeholder.
+
+    - A quoted value (`"a b"`, `` `a b` ``) runs to its closing quote, spaces
+      included, so `password="correct horse"` is masked whole.
+    - A trailing ")" or backtick is dropped only when its opener appears before
+      the key on the same line (`f(token=x)`, `` `token=x` ``). A value that
+      itself ends in ")" (`Pa55word)`) is masked whole.
+    - Sentence punctuation stays inside the masked span (one character too many
+      leaks nothing) unless it follows such a closer (`f(token=x).`).
     """
-    while value and (
-        value[-1] in "`" + punctuation or (value[-1] == ")" and value.count(")") > value.count("("))
-    ):
-        value = value[:-1]
-    return value
+    start = match.start("value")
+    line_start = text.rfind("\n", 0, match.start()) + 1
+    line_end = text.find("\n", start)
+    line_end = len(text) if line_end == -1 else line_end
+    quote = match.group("quote")
+    if quote:
+        close = text.find(quote, start, line_end)
+        if close != -1:
+            return start, close, text[start:close]
+
+    end = match.end("value")
+    prefix = text[line_start : match.start("key")]
+    core = end
+    while core > start and text[core - 1] in SENTENCE_PUNCTUATION:
+        core -= 1
+    stripped = core
+    while stripped > start:
+        closer = text[stripped - 1]
+        opener = CODE_CLOSERS.get(closer)
+        if opener is None:
+            break
+        value = text[start:stripped]
+        if closer == "`":
+            belongs_to_code = prefix.count("`") % 2 == 1
+        else:
+            belongs_to_code = prefix.count(opener) > prefix.count(closer) and value.count(
+                closer
+            ) > value.count(opener)
+        if not belongs_to_code:
+            break
+        stripped -= 1
+    # A value made only of punctuation ("!!!!!!") is still a value.
+    bare = text[start:stripped] or text[start:end]
+    if stripped < core:
+        return start, stripped, bare
+    return start, end, bare
 
 
 def find_secrets(text: str) -> list[Finding]:
@@ -541,15 +587,14 @@ def find_secrets(text: str) -> list[Finding]:
         # ASCII mode: in Unicode mode Japanese letters count as \w, so `\b` finds no
         # boundary in "トークンはghp_..." and the token would go undetected.
         for match in re.finditer(pattern, text, re.ASCII):
-            if "value" in match.re.groupindex:
-                # Sentence punctuation is ignored when deciding whether this is a
-                # placeholder ("def f(token=None):"), but kept inside the masked
-                # span: masking one character too many leaks nothing.
-                bare = trim_value(match.group("value"), punctuation=":.!?")
-                if not bare or PLACEHOLDER.match(bare) or is_token_count(match, bare):
+            if kind == "secret-assignment":
+                start, end, bare = assignment_span(text, match)
+                if PLACEHOLDER.match(bare) or is_token_count(match, bare):
                     continue
-                start = match.start("value")
-                end = start + len(trim_value(match.group("value")))
+            elif "value" in match.re.groupindex:
+                if PLACEHOLDER.match(match.group("value")):
+                    continue
+                start, end = match.span("value")
             elif kind == "private-key":
                 block = PRIVATE_KEY_BLOCK.match(text, match.start())
                 start, end = match.start(), block.end() if block else match.end()
@@ -710,6 +755,10 @@ def cmd_publish(args: argparse.Namespace) -> int:
         old = parse_frontmatter(split[0], Report()) if split else {}
         old_id = old.get("handoff_id")
         if old_id == new_id:
+            if current_text == read_text(draft):
+                # An earlier publish replaced handoff.md and then failed (e.g. on
+                # metadata.json). Finish it instead of refusing for good.
+                return finish_publish(root, handoff_dir, draft, new_id, resumed=True)
             print(f"refused: the draft reuses the current handoff_id {new_id}; nothing was changed")
             return 1
         if isinstance(old_id, str) and HANDOFF_ID.match(old_id):
@@ -722,8 +771,14 @@ def cmd_publish(args: argparse.Namespace) -> int:
             name = f"invalid-{new_id}.md"
         archive = handoff_dir / HISTORY_DIR / name
         if archive.exists():
-            print(f"refused: {archive} already exists; nothing was changed")
-            return 1
+            if read_text(archive) == current_text:
+                # An earlier publish archived this handoff and then failed before
+                # replacing it. The copy is identical, so reuse it.
+                print(f"already archived: {archive.relative_to(root).as_posix()}")
+                archive = None
+            else:
+                print(f"refused: {archive} already exists; nothing was changed")
+                return 1
 
     draft_text = read_text(draft)
     for finding in find_secrets(draft_text):
@@ -734,17 +789,28 @@ def cmd_publish(args: argparse.Namespace) -> int:
         )
 
     print_report(report)
+    # Each completed write is printed, so a failure part-way says exactly how far
+    # it got; re-running the same command then picks up from there.
     gitignore = handoff_dir / ".gitignore"
     if not gitignore.exists():
         atomic_write(gitignore, "*\n")
+        print(f"wrote {gitignore.relative_to(root).as_posix()}")
     if archive is not None and current_text is not None:
         atomic_write(archive, current_text)
         print(f"archived the previous handoff to {archive.relative_to(root).as_posix()}")
     atomic_write(current, draft_text)
-    atomic_write(handoff_dir / METADATA_FILE, metadata_document(new_id, "ready", None, None))
+    print(f"wrote {current.relative_to(root).as_posix()}")
+    return finish_publish(root, handoff_dir, draft, new_id, resumed=False)
+
+
+def finish_publish(root: Path, handoff_dir: Path, draft: Path, new_id: str, resumed: bool) -> int:
+    metadata = handoff_dir / METADATA_FILE
+    atomic_write(metadata, metadata_document(new_id, "ready", None, None))
+    print(f"wrote {metadata.relative_to(root).as_posix()}")
     if draft.resolve().parent == handoff_dir.resolve() and draft.name == DRAFT_FILE:
         draft.unlink()
-    print(f"published {current.relative_to(root).as_posix()} ({new_id})")
+    verb = "finished publishing" if resumed else "published"
+    print(f"{verb} {(handoff_dir / HANDOFF_FILE).relative_to(root).as_posix()} ({new_id})")
     return 0
 
 
@@ -867,7 +933,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {exc}", file=sys.stderr)
         print(
             "stopped here: files written or deleted so far are listed above;"
-            " no file was left half-written",
+            " no file was left half-written. Fix the cause and run the same command again",
             file=sys.stderr,
         )
         return 1

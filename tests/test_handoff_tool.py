@@ -23,6 +23,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 _SKILL = Path(__file__).resolve().parent.parent / "skills" / "hand-off-context"
 _SCRIPT = _SKILL / "scripts" / "handoff_tool.py"
@@ -333,12 +334,26 @@ class TestSecrets(unittest.TestCase):
             f"f({PW}=hunter2xyz)": f"f({PW}=[REDACTED])",
             f"`{PW}=hunter2xyz`": f"`{PW}=[REDACTED]`",
             f"{PW}=f(x)y": f"{PW}=[REDACTED]",
+            f"{PW}=Pa55word)": f"{PW}=[REDACTED]",
+            f"（{PW}=hunter2xyz）": f"（{PW}=[REDACTED]）",
+            f"f({PW}=hunter2xyz).": f"f({PW}=[REDACTED]).",
+            f"{PW}=hunter2.": f"{PW}=[REDACTED]",
+            f"{PW}=!!!!!!": f"{PW}=[REDACTED]",
+            f'{PW}="correct horse battery"': f'{PW}="[REDACTED]"',
+            f"{PW}=`correct horse battery`": f"{PW}=`[REDACTED]`",
+            "api_key=`" + "sk_live_abc`.": "api_key=`[REDACTED]`.",
+            "postgres://u:" + "hunter2)@db": "postgres://u:[REDACTED]@db",
         }
         for text, expected in cases.items():
             with self.subTest(text=text):
                 self.assertEqual(
                     handoff_tool.redact(text, handoff_tool.find_secrets(text)), expected
                 )
+
+    def test_closers_and_punctuation_around_placeholders(self):
+        for text in ("def f(token=None):", "（token=None）", "token=`None`.", "f(token=None)."):
+            with self.subTest(text=text):
+                self.assertEqual(self.kinds(text), [])
 
     def test_token_counts_are_ignored(self):
         self.assertEqual(self.kinds("max_tokens: 1024\nTOKEN_LIMIT=4096\ntoken_ratio: 0.5\n"), [])
@@ -390,6 +405,17 @@ class TestScanCommand(TempDirTest):
         finally:
             os.umask(previous)
         self.assertEqual((self.root / "new.md").stat().st_mode & 0o777, 0o644)
+        previous = os.umask(0o077)
+        try:
+            handoff_tool.atomic_write(self.root / "private.md", "x\n")
+        finally:
+            os.umask(previous)
+        self.assertEqual((self.root / "private.md").stat().st_mode & 0o777, 0o600)
+
+    def test_chmod_failure_does_not_fail_the_write(self):
+        with mock.patch.object(handoff_tool.os, "chmod", side_effect=PermissionError("no")):
+            handoff_tool.atomic_write(self.root / "share.md", "x\n")
+        self.assertEqual((self.root / "share.md").read_text(), "x\n")
 
     @unittest.skipIf(os.name == "nt", "POSIX permission bits")
     def test_redact_keeps_permissions(self):
@@ -444,9 +470,52 @@ class TestPublishAndMark(TempDirTest):
         self.assertEqual((self.handoff_dir / "handoff.md").read_text(), before)
         self.assertFalse((self.handoff_dir / "history").exists())
 
-    def test_reused_id_is_refused(self):
+    def test_reused_id_with_different_content_is_refused(self):
         self.publish(handoff())
-        self.assertEqual(self.publish(handoff())[0], 1)
+        changed = handoff().replace("補足があれば書く。", "別の内容")
+        self.assertEqual(self.publish(changed)[0], 1)
+
+    def test_republishing_the_same_draft_is_harmless(self):
+        self.publish(handoff())
+        code, out = self.publish(handoff())
+        self.assertEqual(code, 0)
+        self.assertIn("finished publishing", out)
+        self.assertFalse((self.handoff_dir / "history").exists())
+
+    def failing_replace(self, name):
+        """os.replace that fails when the target is `name`, like a full disk."""
+        real = os.replace
+
+        def replace(src, dst):
+            if Path(dst).name == name:
+                raise PermissionError(13, "Permission denied")
+            return real(src, dst)
+
+        return mock.patch.object(handoff_tool.os, "replace", side_effect=replace)
+
+    def test_retry_after_failing_on_handoff_md(self):
+        self.publish(handoff())
+        second = handoff("20261020T020000Z-bbbb", previous='"20261020T010000Z-aaaa"')
+        with self.failing_replace("handoff.md"):
+            code, out = self.publish(second)
+        self.assertEqual(code, 1)
+        self.assertIn("archived the previous handoff", out)
+        code, out = self.publish(second)
+        self.assertEqual(code, 0, out)
+        self.assertIn("already archived", out)
+        self.assertIn("20261020T020000Z-bbbb", (self.handoff_dir / "handoff.md").read_text())
+
+    def test_retry_after_failing_on_metadata(self):
+        self.publish(handoff())
+        second = handoff("20261020T020000Z-bbbb", previous='"20261020T010000Z-aaaa"')
+        with self.failing_replace("metadata.json"):
+            code, out = self.publish(second)
+        self.assertEqual(code, 1)
+        self.assertIn("wrote .handoff/handoff.md", out)
+        code, out = self.publish(second)
+        self.assertEqual(code, 0, out)
+        metadata = json.loads((self.handoff_dir / "metadata.json").read_text())
+        self.assertEqual(metadata["handoff_id"], "20261020T020000Z-bbbb")
 
     def test_existing_archive_is_not_overwritten(self):
         self.publish(handoff())
@@ -572,6 +641,26 @@ class TestClearCommand(TempDirTest):
                 code = handoff_tool.main(["clear", "--history", "--yes", "--root", str(self.root)])
         finally:
             history.chmod(0o755)
+        self.assertEqual(code, 1)
+        self.assertIn("deleted .handoff/handoff.md", out.getvalue())
+        self.assertNotIn("history/", out.getvalue())
+        self.assertIn("stopped here", err.getvalue())
+
+    def test_failure_part_way_is_reported_as_root_too(self):
+        real = Path.unlink
+
+        def unlink(path, *args, **kwargs):
+            if path.parent.name == "history":
+                raise PermissionError(13, "Permission denied")
+            return real(path, *args, **kwargs)
+
+        out, err = io.StringIO(), io.StringIO()
+        with (
+            mock.patch.object(Path, "unlink", unlink),
+            contextlib.redirect_stdout(out),
+            contextlib.redirect_stderr(err),
+        ):
+            code = handoff_tool.main(["clear", "--history", "--yes", "--root", str(self.root)])
         self.assertEqual(code, 1)
         self.assertIn("deleted .handoff/handoff.md", out.getvalue())
         self.assertNotIn("history/", out.getvalue())

@@ -33,7 +33,7 @@ python3 <このスキルのディレクトリ>/scripts/handoff_tool.py <サブ�
 | `changed-files [--limit N]` | `git status` から Changed Files の表を出力する。Description 列は空 | export 3 |
 | `scan FILE [--redact]` | 秘密情報を検出し、行番号・セクション・種類を出力する。値そのものは出力しない。`--redact` で該当箇所を `[REDACTED]` に置き換える | export 5 |
 | `validate [FILE]` | Handoff File を検証し、要約を出力する。FILE を省くと `.handoff/handoff.md` と `metadata.json` を対象にする | import 2、status |
-| `publish DRAFT` | DRAFT を検証し、現在の `handoff.md` を `history/` へ退避してから DRAFT に置き換え、`metadata.json` を `ready` にする。DRAFT が `.handoff/draft.md` なら最後に削除する。秘密情報らしいものがあれば WARNING を出す（拒否はしない） | export 6 |
+| `publish DRAFT` | DRAFT を検証し、現在の `handoff.md` を `history/` へ退避してから DRAFT に置き換え、`metadata.json` を `ready` にする。DRAFT が `.handoff/draft.md` なら最後に削除する。書き込むたびにファイル名を出力する。秘密情報らしいものがあれば WARNING を出す（拒否はしない） | export 6 |
 | `mark --status imported --agent NAME` / `mark --status invalid` | `metadata.json` に import の結果を書く。`handoff.md` がなければ何も書かずに拒否する | import 4 |
 | `clear [--history \| --keep N] [--yes]` | 削除対象を一覧にする。`--yes` を付けたときだけ削除する | clear |
 
@@ -50,15 +50,18 @@ python3 <このスキルのディレクトリ>/scripts/handoff_tool.py <サブ�
 | 出力 | 原因と対処 |
 | --- | --- |
 | `the draft is not a valid Handoff File` | 下書きの frontmatter が不正。続けて出る `ERROR` を直す |
-| `the draft reuses the current handoff_id` | 下書きの `handoff_id` が現在の引き継ぎと同じ。`info` で新しい値を取り直す |
+| `the draft reuses the current handoff_id` | 下書きの `handoff_id` が現在の引き継ぎと同じで、内容が違う。`info` で新しい値を取り直す（内容まで同じなら拒否せず、途中で止まった publish の続きとして完了する） |
 | `handoff_id ... is not YYYYMMDDTHHMMSSZ-xxxx` | 下書きの `handoff_id` の形式が違う。履歴のファイル名に使うため、`validate` と違って警告ではなく拒否する。`info` で新しい値を取り直す |
-| `... already exists` | 退避先の履歴ファイルがすでにある。上書きせずユーザーに伝える（次節） |
+| `... already exists` | 退避先の履歴ファイルがすでにあり、退避しようとしている内容と違う。上書きせずユーザーに伝える（次節） |
 
 ## 退避先がすでにある場合
 
-`publish` は、履歴への退避を終えた後で置き換えに失敗することがある（ディスクの空き不足など）。このとき `history/` には退避したファイルが残り、`handoff.md` は元のままなので、再実行すると `already exists` で拒否される。
+`publish` が途中で失敗したとき（ディスクの空き不足など）は、原因を取り除いて同じコマンドを再実行すればよい。どこまで進んだかは、失敗の前に出力された `wrote` / `archived` の行で分かる。
 
-その履歴ファイルの中身が現在の `handoff.md` と同じかを確かめ、同じなら、ユーザーの確認を得てから履歴ファイルを削除して再実行する。違う場合は、どちらを残すかをユーザーに尋ねる。
+- 履歴への退避の後で失敗した場合：退避先のファイルが現在の `handoff.md` と同じ内容なら、それを使って続ける（`already exists` では拒否しない）
+- `handoff.md` を置き換えた後で失敗した場合：下書きと `handoff.md` が同じ内容なら、`metadata.json` の書き込みから続ける
+
+`already exists` で拒否されるのは、退避先に**別の内容**の履歴ファイルがあるときだけである。その場合は、どちらを残すかをユーザーに尋ねる。
 
 ## 書き込みの安全性
 
