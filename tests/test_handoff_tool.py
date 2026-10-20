@@ -21,6 +21,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -296,9 +297,9 @@ class TestSecrets(unittest.TestCase):
     def test_tokens_next_to_japanese_text(self):
         token = "ghp_" + "a" * 36
         self.assertEqual(self.kinds(f"トークンは{token}です"), ["github-token"])
-        text = "password=hunter2xyz。次に"
+        text = f"{PW}=hunter2xyz。次に"
         self.assertEqual(
-            handoff_tool.redact(text, handoff_tool.find_secrets(text)), "password=[REDACTED]。次に"
+            handoff_tool.redact(text, handoff_tool.find_secrets(text)), f"{PW}=[REDACTED]"
         )
 
     def test_overlap_reports_once(self):
@@ -327,33 +328,57 @@ class TestSecrets(unittest.TestCase):
                 self.assertEqual(self.kinds(text), [])
         self.assertEqual(self.kinds(f"f({PW}=hunter2xyz)"), ["secret-assignment"])
 
-    def test_brackets_inside_a_value_are_masked_whole(self):
+    def test_the_rest_of_the_line_is_masked(self):
         cases = {
             f"{PW}=ab)cd1234": f"{PW}=[REDACTED]",
             f"DB_{PW.upper()}=p`ss)word99": f"DB_{PW.upper()}=[REDACTED]",
-            f"f({PW}=hunter2xyz)": f"f({PW}=[REDACTED])",
-            f"`{PW}=hunter2xyz`": f"`{PW}=[REDACTED]`",
-            f"{PW}=f(x)y": f"{PW}=[REDACTED]",
-            f"{PW}=Pa55word)": f"{PW}=[REDACTED]",
-            f"（{PW}=hunter2xyz）": f"（{PW}=[REDACTED]）",
-            f"f({PW}=hunter2xyz).": f"f({PW}=[REDACTED]).",
-            f"{PW}=hunter2.": f"{PW}=[REDACTED]",
+            f"f({PW}=hunter2xyz)": f"f({PW}=[REDACTED]",
+            f"`{PW}=hunter2xyz`": f"`{PW}=[REDACTED]",
+            f"（{PW}=hunter2xyz）": f"（{PW}=[REDACTED]",
             f"{PW}=!!!!!!": f"{PW}=[REDACTED]",
-            f'{PW}="correct horse battery"': f'{PW}="[REDACTED]"',
-            f"{PW}=`correct horse battery`": f"{PW}=`[REDACTED]`",
-            "api_key=`" + "sk_live_abc`.": "api_key=`[REDACTED]`.",
+            f'{PW}="correct horse battery"': f"{PW}=[REDACTED]",
+            f'{PW}="ab\\"cd efgh"': f"{PW}=[REDACTED]",
+            f"{PW}: correct horse Zq9vK2mX": f"{PW}: [REDACTED]",
+            f"{PW}: None hunter2xyz": f"{PW}: [REDACTED]",
+            f"{PW} := 'Zq9vK2mX'": f"{PW} := [REDACTED]",
+            f"if {PW} == 'Zq9vK2mX':": f"if {PW} == [REDACTED]",
+            f"{PW} => 'Zq9vK2mX'": f"{PW} => [REDACTED]",
+            f"{PW}：Zq9vK2mX": f"{PW}：[REDACTED]",
+            "パスワード: " + "Zq9vK2mX": "パスワード: [REDACTED]",
+            "api_key=`" + "sk_live_abc`.": "api_key=[REDACTED]",
+            f"x\r\n{PW}=hunter2xyz\r\ny": f"x\r\n{PW}=[REDACTED]\r\ny",
+            "token=None, " + f"{PW}=hunter2xyz": "token=[REDACTED]",
+            "token: 1024 " + "tokens": "token: [REDACTED]",
+            "token: None # was " + "hunter2xyz": "token: [REDACTED]",
+        }
+        for text, expected in cases.items():
+            with self.subTest(text=text):
+                self.assertEqual(
+                    handoff_tool.redact(text, handoff_tool.find_secrets(text)), expected
+                )
+
+    def test_values_on_the_following_lines_are_masked(self):
+        cases = {
+            f"{PW}: |\n  Zq9vK2mX\nnext: 1": f"{PW}: [REDACTED]\n  [REDACTED]\nnext: 1",
+            f"{PW}: >-\n  Zq9vK2mX\n  more\n": f"{PW}: [REDACTED]\n  [REDACTED]\n  [REDACTED]\n",
+            f"{PW}:\n  Zq9vK2mX": f"{PW}:\n  [REDACTED]",
+            f"connect(\n {PW}=\n  'Zq9vK2mX')": f"connect(\n {PW}=\n  [REDACTED]",
+            f'{PW} = """\nZq9vK2mX\n"""\nx': f"{PW} = [REDACTED]\n[REDACTED]\n[REDACTED]\nx",
+            f"{PW}:\nnext: 1": f"{PW}:\nnext: 1",
+            "foo:\n  token: None\n": "foo:\n  token: None\n",
+        }
+        for text, expected in cases.items():
+            with self.subTest(text=text):
+                self.assertEqual(
+                    handoff_tool.redact(text, handoff_tool.find_secrets(text)), expected
+                )
+
+    def test_url_credentials(self):
+        cases = {
             "postgres://u:" + "hunter2)@db": "postgres://u:[REDACTED]@db",
-            f'{PW}="ab\\"cd efgh"': f'{PW}="[REDACTED]"',
-            f'{PW}="correct horse battery': f'{PW}="[REDACTED]',
-            f'{PW}=" leading secret"': f'{PW}="[REDACTED]"',
-            f"{PW}=it'sSecretXyz": f"{PW}=[REDACTED]",
-            f'{PW}=abc"defghi,more': f"{PW}=[REDACTED]",
-            f"f({PW}=Pa55word))": f"f({PW}=[REDACTED])",
-            f"(f({PW}=x(y)))": f"(f({PW}=[REDACTED]))",
-            f"x\r\n{PW}=hunter2xyz\r\n": f"x\r\n{PW}=[REDACTED]\r\n",
-            f'{PW}="abc"def-ghi': f'{PW}="[REDACTED]',
-            f'{{"{PW}": "abc def", "x": 1}}': f'{{"{PW}": "[REDACTED]", "x": 1}}',
-            f'{PW}="abc def".': f'{PW}="[REDACTED]".',
+            "redis://:" + "Zq9vK2mX@localhost:6379": "redis://:[REDACTED]@localhost:6379",
+            "postgres://u:ab@" + "Zq9vK2mX@db": "postgres://u:[REDACTED]@db",
+            "https://host:8080/users/@me": "https://host:8080/users/@me",
         }
         for text, expected in cases.items():
             with self.subTest(text=text):
@@ -375,14 +400,49 @@ class TestSecrets(unittest.TestCase):
                 self.assertEqual(self.kinds(text), [])
 
     def test_placeholder_look_alikes_are_detected(self):
-        for value in ("$WeePW123", "<@|zy^>", "os.environXsecret"):
+        for value in (
+            "$WeePW123",
+            "<@|zy^>",
+            "os.environXsecret",
+            "<yUeMrbIP>",
+            "${Zq9vK2mX}",
+            "env.Zq9vK2mX",
+        ):
             with self.subTest(value=value):
                 self.assertEqual(self.kinds(f"{PW}={value}"), ["secret-assignment"])
 
     def test_environment_references_are_placeholders(self):
-        for value in ("$GITHUB_TOKEN", "os.environ['X']", "os.environ.get('X')", "env.TOKEN"):
+        for value in (
+            "$GITHUB_TOKEN",
+            "${TOKEN}",
+            '"${TOKEN}"',
+            "${token}",
+            "<your-token>",
+            "<API_KEY>",
+            "os.environ['X']",
+            "os.environ.get('X')",
+            "env.TOKEN",
+            "なし",
+        ):
             with self.subTest(value=value):
                 self.assertEqual(self.kinds(f"API_TOKEN={value}"), [])
+
+    def test_large_inputs_stay_linear(self):
+        """A quadratic scan takes tens of seconds here; linear code takes well under one."""
+        cases = (
+            "f(token=None) " * 20000,
+            "\n".join(f"(f({PW}=abc{i}) token=None (x" for i in range(20000)),
+            "a." * 8000,
+            "a" * 100000,
+        )
+        for text in cases:
+            started = time.monotonic()
+            findings = handoff_tool.find_secrets(text)
+            handoff_tool.redact(text, findings)
+            sections = handoff_tool.SectionIndex(text)
+            for finding in findings:
+                sections.title(finding.start)
+            self.assertLess(time.monotonic() - started, 5)
 
     def test_token_counts_are_ignored(self):
         self.assertEqual(self.kinds("max_tokens: 1024\nTOKEN_LIMIT=4096\ntoken_ratio: 0.5\n"), [])
@@ -512,6 +572,26 @@ class TestPublishAndMark(TempDirTest):
         self.assertIn("already published", out)
         self.assertEqual((self.handoff_dir / "metadata.json").read_text(), before)
         self.assertFalse((self.handoff_dir / "history").exists())
+
+    def test_republishing_removes_the_draft_and_restores_gitignore(self):
+        self.publish(handoff())
+        (self.handoff_dir / ".gitignore").unlink()
+        code, out = self.publish(handoff())
+        self.assertEqual(code, 0)
+        self.assertIn("already published", out)
+        self.assertFalse((self.handoff_dir / "draft.md").exists())
+        self.assertEqual((self.handoff_dir / ".gitignore").read_text(), "*\n")
+
+    def test_undecodable_handoff_is_reported_without_traceback(self):
+        self.handoff_dir.mkdir()
+        (self.handoff_dir / "handoff.md").write_bytes(b"\xff\xfe broken")
+        draft = self.write("d.md", handoff())
+        err = io.StringIO()
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
+            code = handoff_tool.main(["publish", str(draft), "--root", str(self.root)])
+        self.assertEqual(code, 1)
+        self.assertIn("not valid UTF-8", err.getvalue())
+        self.assertNotIn("Traceback", err.getvalue())
 
     def test_republishing_keeps_the_import_status(self):
         self.publish(handoff())

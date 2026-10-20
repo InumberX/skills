@@ -60,7 +60,7 @@ python3 <このスキルのディレクトリ>/scripts/handoff_tool.py <サブ�
 
 - 履歴への退避の後で失敗した場合：退避先のファイルが現在の `handoff.md` と同じ内容なら、それを使って続ける（`already exists` では拒否しない）
 - `handoff.md` を置き換えた後で失敗した場合：下書きと `handoff.md` が同じ内容で、`metadata.json` がまだこの引き継ぎのものになっていなければ、`metadata.json` の書き込みから続ける
-- すでに最後まで公開済みの場合（`metadata.json` もこの引き継ぎのもの）：`already published` と出力し、何も変更せずに終了コード 0 で終わる。import 後の `imported` などの状態は書き換えない
+- すでに最後まで公開済みの場合（`metadata.json` もこの引き継ぎのもの）：`already published` と出力し、終了コード 0 で終わる。`handoff.md` と `metadata.json` は変更せず、import 後の `imported` などの状態も書き換えない。`.handoff/draft.md` の削除と、`.handoff/.gitignore` がなければその作成だけを行う
 
 `already exists` で拒否されるのは、退避先に**別の内容**の履歴ファイルがあるときだけである。その場合は、どちらを残すかをユーザーに尋ねる。
 
