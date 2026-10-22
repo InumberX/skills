@@ -1,6 +1,6 @@
 # 形式規約（Agent Skills 標準）
 
-スキルは Anthropic の Agent Skills 標準形式で作る。この形式にしておくことで、Claude Code が `.claude/skills/` 配下のスキルを自動発見・自動発動でき、将来の公開・プラグイン配布・他ツール対応も中身の書き直しなしに行える。
+スキルは Anthropic の Agent Skills 標準形式で作る。この形式にしておくことで、Claude Code は `.claude/skills/`、Codex は `.agents/skills/` 配下のスキルを自動発見・自動発動でき、将来の公開・プラグイン配布・他ツール対応も中身の書き直しなしに行える。
 
 ## ディレクトリ構成
 

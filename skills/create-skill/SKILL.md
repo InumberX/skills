@@ -66,6 +66,7 @@ description: "Create a new Agent Skill following this repository's conventions �
 - [ ] 機械検出可能なルールを書いていない
 - [ ] 配置先が `rules/placement.md` の線引きに合っている
 - [ ] **本リポジトリに置くスキルなら** `.claude-plugin/marketplace.json` の `plugins` にエントリを追加/削除した（`name`・`source` はディレクトリ名と一致）。同期漏れは `scripts/validate_marketplace.py` が CI で検出する
+- [ ] **本リポジトリに置くスキルなら** 全部入りプラグインの説明文に並ぶスキル一覧（`.claude-plugin/marketplace.json` の `inumberx-skills` エントリ、`.claude-plugin/plugin.json`、`.codex-plugin/plugin.json` の `description` と `interface.longDescription`）を更新した。Codex 向けは全部入りだけを配布し、`skills/` 配下を丸ごと読み込むため、エントリの追加は要らない
 
 ## 拡張ガイド（将来の作業者向け）
 

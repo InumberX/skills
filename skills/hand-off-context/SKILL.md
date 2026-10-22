@@ -18,7 +18,7 @@ description: "Hand off development context between AI coding agents (Claude Code
 - プロジェクトに `.handoff/` があり、「続きから始めて」「作業を再開して」のように前回の作業の再開を依頼された → `import`。引き継ぎに触れない依頼でも、`.handoff/handoff.md` を直接読まずにこのスキルで読み込む。照合と、信頼できない入力としての扱いが抜けるため
 - 「レビュー結果を実装側に返して」と依頼された → `export --kind review`
 - 「引き継ぎの状態を見せて」「引き継いでから何が変わった？」「引き継ぎデータを消して」と依頼された → `status` / `diff` / `clear`
-- `/hand-off-context export`（Claude Code）や `$hand-off-context import`（Codex）のように明示的に呼び出された
+- `/hand-off-context export`（Claude Code）や `$hand-off-context import`（Codex。プラグインで導入した場合は `$inumberx-skills:hand-off-context import`）のように明示的に呼び出された
 
 ## コマンド
 

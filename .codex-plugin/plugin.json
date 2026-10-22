@@ -1,0 +1,26 @@
+{
+  "name": "inumberx-skills",
+  "description": "AI コーディングエージェント向けのプロジェクト横断スキルを一括で提供する全部入りプラグイン(create-pr / create-skill / hand-off-context / investigate-failure / record-lesson / refine-request / rename-or-delete / review-pr / verify-completion / write-commit)。skills/ 配下のスキルをすべて含み、review-pr にはセキュリティ観点(rules/security/)とレビューの進め方(rules/process.md)も同梱する。",
+  "author": {
+    "name": "InumberX",
+    "url": "https://github.com/InumberX"
+  },
+  "homepage": "https://github.com/InumberX/skills#readme",
+  "repository": "https://github.com/InumberX/skills",
+  "keywords": ["skills", "workflow", "conventions", "pull-request", "review", "handoff"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "InumberX Skills",
+    "shortDescription": "プロジェクト横断の開発ワークフロー集",
+    "longDescription": "Agent Skills 標準形式のプロジェクト横断スキル集。create-pr / create-skill / hand-off-context / investigate-failure / record-lesson / refine-request / rename-or-delete / review-pr / verify-completion / write-commit の全 10 スキルを含む。Claude Code 向けの配布と同じ skills/ を共用する。",
+    "developerName": "InumberX",
+    "category": "Coding",
+    "capabilities": [],
+    "websiteURL": "https://github.com/InumberX/skills",
+    "defaultPrompt": [
+      "この PR をレビューして",
+      "今の作業を Claude Code に引き継いで",
+      "この変更のコミットメッセージを書いて"
+    ]
+  }
+}
