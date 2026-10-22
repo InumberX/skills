@@ -27,7 +27,15 @@ skills/
 
 ## 取り込み方法
 
-### 1. プラグインマーケットプレイス（推奨）
+Claude Code と Codex のどちらにも、プラグインとして導入できる。どちらも同じ `skills/` を配布するため、スキル本文に違いはない。
+
+| | Claude Code | Codex |
+| --- | --- | --- |
+| 配布設定 | `.claude-plugin/marketplace.json`・`.claude-plugin/plugin.json` | `.agents/plugins/marketplace.json`・`.codex-plugin/plugin.json` |
+| 導入できる単位 | 全部入り・個別 | 全部入りのみ |
+| 明示的な呼び出し | `/review-pr` | `$inumberx-skills:review-pr` |
+
+### 1. Claude Code: プラグインマーケットプレイス（推奨）
 
 本リポジトリは Claude Code の**プラグインマーケットプレイス**として公開している(`.claude-plugin/marketplace.json`)。**一括**でも**個別**でも導入できる。
 
@@ -63,13 +71,42 @@ skills/
 >
 > バージョンを固定していないため、`marketplace.json` 更新時点の最新スキルが配布される。特定版に固定したい場合は各エントリに `version` を付ける。
 
-### 2. 手動コピー
+### 2. Codex: プラグインマーケットプレイス
 
-マーケットプレイスを使わない場合は、使いたいスキルを各プロジェクトの `.claude/skills/` へ手動コピーする。取り込み先で改善したら本リポジトリに還元する。
+本リポジトリは Codex の**プラグインマーケットプレイス**としても公開している(`.agents/plugins/marketplace.json`)。Codex CLI 0.163.0 で、空の `CODEX_HOME` から登録・インストールし、全 10 スキルが認識されることを確認した。
 
-### 3. Codex で使う（hand-off-context）
+```bash
+# マーケットプレイスを登録（初回のみ。登録だけではインストールされない）
+codex plugin marketplace add InumberX/skills
 
-`hand-off-context` は Claude Code と Codex の間で作業を引き継ぐスキルのため、Codex 側にも置く。Codex はリポジトリ内の `.agents/skills/` を読み込む（パスは [Codex の公式ドキュメント](https://developers.openai.com/codex/skills) で確認する）。
+# 全部入りプラグインをインストール
+codex plugin add inumberx-skills@inumberx-skills
+
+# 導入状態を確認（STATUS が installed, enabled になる）
+codex plugin list
+```
+
+更新を取り込む:
+
+```bash
+codex plugin marketplace upgrade inumberx-skills
+```
+
+新しいコミットを取得すると、インストール済みのプラグインも入れ直される。プラグイン側の `version` を上げる必要はない。
+
+インストールしたスキルは `inumberx-skills:<スキル名>` という名前で自動発見・自動発動される。明示的に呼び出すときは `$inumberx-skills:review-pr` のように書く。アンインストールは `codex plugin remove inumberx-skills@inumberx-skills`、マーケットプレイスの登録解除は `codex plugin marketplace remove inumberx-skills` で行う。
+
+対応するクライアントは、`codex plugin` サブコマンドを持つ Codex CLI。Codex CLI 0.163.0 で確認した。登録内容は `~/.codex/config.toml`（`CODEX_HOME`）に保存される。同じ設定を読む IDE 拡張や Codex アプリでも使えるはずだが、動作は確認していない。
+
+Claude Code との違いは次のとおり。
+
+- **個別インストールはできない。** Codex はプラグインのルート直下の `skills/`、または `plugin.json` の `skills` で指定したパスからスキルを読み込み、この指定に `./` は使えない。個別プラグインのルートになる `skills/<name>/` には `SKILL.md` が直下にあるだけなので、スキルとして認識されない。
+- **`.agents/plugins/marketplace.json` が `.claude-plugin/marketplace.json` より優先される。** Codex はこれがあると Claude 用のカタログを読まないため、Claude 用の個別エントリは Codex には出てこない。
+- **`review-pr` の汎用の脆弱性検出は Claude Code 組み込みの `/security-review` が前提になっている。** Codex には同じものがないため、汎用の検出は実施していないことをレビュー結果に書く（`skills/review-pr/SKILL.md`）。
+
+### 3. 手動コピー
+
+マーケットプレイスを使わない場合は、使いたいスキルを各プロジェクトにコピーする。置き場所は Claude Code が `.claude/skills/`、Codex が `.agents/skills/` である（パスは [Codex の公式ドキュメント](https://developers.openai.com/codex/skills) で確認する）。取り込み先で改善したら本リポジトリに還元する。
 
 ```text
 project/
@@ -79,11 +116,22 @@ project/
 
 両方に同じ実体を置きたい場合は、`.claude/skills/hand-off-context` から `../../.agents/skills/hand-off-context` へのシンボリックリンクにしてもよい。Windows ではシンボリックリンクに開発者モードと `git config core.symlinks true` が要るため、コピーを標準とする。
 
-呼び出しは Claude Code が `/hand-off-context export`、Codex が `$hand-off-context import` のようになる。引き継ぎ内容は取り込み先の `.handoff/` に保存され、`.handoff/.gitignore` によって Git の管理対象から外れる。
+`hand-off-context` は Claude Code と Codex の間で作業を引き継ぐスキルなので、両方に入れておく。呼び出しは Claude Code が `/hand-off-context export`、Codex が `$hand-off-context import` になる（プラグインで導入した場合は `$inumberx-skills:hand-off-context import`）。引き継ぎ内容は取り込み先の `.handoff/` に保存され、`.handoff/.gitignore` によって Git の管理対象から外れる。
 
 ### 公開物の検査
 
-`scripts/validate_marketplace.py` が `marketplace.json` の妥当性と `skills/` ディレクトリとの同期（登録漏れ・削除済みエントリの残存）を機械的に検査する。`.github/workflows/validate.yml` が push(main) と全 PR で自動実行するため、スキルを追加・削除したら `marketplace.json` のエントリも合わせて更新する（ローカルでは `python3 scripts/validate_marketplace.py`）。
+`scripts/validate_marketplace.py` は、Claude Code 用の `marketplace.json` の妥当性と、`skills/` ディレクトリとの同期（登録漏れ・削除済みエントリの残存）を機械的に検査する。スキルを追加・削除したら、`marketplace.json` のエントリも合わせて更新する。
+
+`scripts/validate_codex_plugin.py` は、Codex 用の 2 ファイルを検査する。
+
+- 名前が Claude 用のカタログと一致している。
+- 全部入りのエントリが 1 件だけで、リポジトリ直下を指している。
+- `policy` と `category` の値が正しい。
+- `plugin.json` の `skills` が `skills/` を指している。
+
+Codex 向けは `skills/` を丸ごと配布するので、スキルを追加・削除しても Codex 用のファイルは変わらない。全部入りの説明文に並ぶスキル一覧だけは更新する。
+
+どちらも `.github/workflows/validate.yml` が push(main) と全 PR で自動実行する。ローカルでは `python3 scripts/validate_marketplace.py` と `python3 scripts/validate_codex_plugin.py` で確認できる。
 
 ## 検査の一覧
 
@@ -93,6 +141,7 @@ CI（`.github/workflows/validate.yml`）で自動実行する。ローカルで�
 | --- | --- | --- |
 | SKILL.md の frontmatter | `python3 scripts/validate_skills.py` | `name` / `description` の有無、ケバブケース、ディレクトリ名との一致、ダブルクォート、長さ（`name` は 64 文字、`description` は 1024 文字まで） |
 | マーケットプレイス | `python3 scripts/validate_marketplace.py` | `marketplace.json` と `skills/` の同期 |
+| Codex 用の配布設定 | `python3 scripts/validate_codex_plugin.py` | `.agents/plugins/marketplace.json`・`.codex-plugin/plugin.json` の妥当性と、`skills/` を配布対象にしていること |
 | 日本語の括弧 | `python3 scripts/validate_text.py` | 日本語を囲む半角括弧、全角と半角が対応していない括弧 |
 | ユニットテスト | `python3 -m unittest discover -s tests -p "test_*.py"` | 上記バリデータと、`hand-off-context` の補助スクリプト（`scripts/handoff_tool.py`）のテスト |
 | Markdown の構造 | `npm run lint-markdown` | 見出し・テーブル・コードフェンスの記法（markdownlint） |
