@@ -1,6 +1,6 @@
 ---
 name: create-branch
-description: "Create a working git branch following these projects' conventions — check the working tree, use the branch the user or the environment designates, determine the base branch (develop vs main, or the preceding PR's branch when stacking), branch from the freshly fetched remote base without tracking it, and name it <prefix>/<slug> with write-commit's prefix vocabulary. Covers both flows in use: GitHub Flow (main only) and a simplified Git Flow (feature work off develop, develop to main by release PR). Use when the user asks to create, cut, start, or switch to a new branch, to start work on a new feature or fix, or asks what a branch should be named. Pushing and opening the PR belong to the create-pr skill."
+description: "Create a working git branch following these projects' conventions — check the working tree, use the branch the user or the environment designates, determine the base branch (develop vs main, or the preceding PR's branch when stacking), branch from the freshly fetched remote base without tracking it (or from the current HEAD when work is already committed there), and name it <prefix>/<slug> with write-commit's prefix vocabulary. Covers both flows in use: GitHub Flow (main only) and a simplified Git Flow (feature work off develop, develop to main by release PR). Use when the user asks to create, cut, start, or switch to a new branch, to start work on a new feature or fix, or asks what a branch should be named. Pushing and opening the PR belong to the create-pr skill."
 ---
 
 # create-branch
@@ -27,7 +27,7 @@ description: "Create a working git branch following these projects' conventions 
 
 ### 1. 指定されたブランチ名が無いか確かめる
 
-ユーザー、または実行環境（クラウドのセッション・CI など）がブランチ名を指定している場合は、その名前を使い、手順 4 の命名を飛ばす。指定を無視して規約どおりの名前で作ると、指定先へ push できない、あるいは別のブランチに作業が散らばる。
+ユーザー、または実行環境（クラウドのセッション・CI など）がブランチ名を指定している場合は、その名前を使い、手順 4 の命名を飛ばす（手順 5 以降は同じ）。指定を無視して規約どおりの名前で作ると、指定先へ push できない、あるいは別のブランチに作業が散らばる。
 
 ### 2. 作業ツリーを確認する
 
@@ -64,19 +64,41 @@ git ls-remote --heads origin <name>
 
 どちらかにあれば、既存のブランチを使い回さず、名前を変えるかユーザーに確認する。マージ済みの古いブランチに新しい作業を積むと、PR に古い差分が混ざる。
 
-### 5. 最新のベースから作る
+### 5. 最新のベースを取得する
 
 ```bash
-git fetch origin <base>
-git switch --no-track -c <name> origin/<base>
+git fetch origin "+refs/heads/<base>:refs/remotes/origin/<base>"
 ```
 
-- 手元の `<base>` ではなく、fetch した直後の `origin/<base>` から切る。手元のブランチは古いことが多く、古い地点から切ると PR の時点でコンフリクトする
-- `--no-track` を付ける。`origin/<base>` から切ると上流が `<base>` に設定され、`push.default` の設定次第では、引数なしの `git push` がベースブランチへ向かう。上流は初回の push で `git push -u origin <name>` として設定する
+refspec を省いた `git fetch origin <base>` は使わない。`--single-branch` で clone したリポジトリでは `FETCH_HEAD` しか更新されず、`origin/<base>` が作られないか古いまま残り、次の手順が失敗するか古い地点から切ってしまう。
 
-### 6. 報告する
+### 6. 作成する
 
-作ったブランチ名・ベース（`origin/<base>` のコミット SHA）・持ち込んだ未コミットの変更の有無を伝える。push は依頼されたときだけ行い、PR の作成は `create-pr` に引き継ぐ。
+まず、ベースにまだ無いコミットが手元にあるかを確かめる:
+
+```bash
+git log --oneline origin/<base>..HEAD
+```
+
+- **空のとき**（新しい作業を始める）: 最新のベースから作る
+
+  ```bash
+  git switch --no-track -c <name> origin/<base>
+  ```
+
+  手元の `<base>` ではなく `origin/<base>` から切るのは、手元のブランチは古いことが多く、古い地点から切ると PR の時点でコンフリクトするため。`--no-track` を付けるのは、`origin/<base>` から切ると上流が `<base>` に設定され、`push.default` の設定次第では、引数なしの `git push` がベースブランチへ向かうため。上流は初回の push で `git push -u origin <name>` として設定する
+
+- **コミットがあるとき**（長命ブランチの上ですでにコミットした作業を PR にする、など）: それがこのブランチに入れる作業かをユーザーに確認し、入れるなら現在の HEAD から作る
+
+  ```bash
+  git switch -c <name>
+  ```
+
+  `origin/<base>` から切ると、そのコミットは手元の `<base>` に残ったまま新しいブランチに入らず、PR の差分が空になる。手元の `<base>` は `origin/<base>` より進んだまま残るので、そのことも伝える。`git reset` で戻すかはユーザーに任せ、勝手に戻さない（push 前のコミットは戻すと失われうる）
+
+### 7. 報告する
+
+作ったブランチ名・切り元（`origin/<base>` か現在の HEAD か、とそのコミット SHA）・持ち込んだコミットと未コミットの変更の有無を伝える。push は依頼されたときだけ行い、PR の作成は `create-pr` に引き継ぐ。
 
 ## 拡張ガイド（将来の作業者向け）
 
