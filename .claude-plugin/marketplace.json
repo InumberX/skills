@@ -8,12 +8,22 @@
     {
       "name": "inumberx-skills",
       "source": "./",
-      "description": "全スキルを一括導入する全部入りプラグイン(create-pr / create-skill / hand-off-context / investigate-failure / record-lesson / refine-request / rename-or-delete / review-pr / verify-completion / write-commit)。review-pr にはフレームワーク/プラットフォーム由来のセキュリティ観点とレビューの進め方(rules/process.md)も同梱する。個別に選びたい場合は各スキル名のプラグインを使う。",
+      "description": "全スキルを一括導入する全部入りプラグイン(create-branch / create-pr / create-skill / hand-off-context / investigate-failure / record-lesson / refine-request / rename-or-delete / review-pr / verify-completion / write-commit)。review-pr にはフレームワーク/プラットフォーム由来のセキュリティ観点とレビューの進め方(rules/process.md)も同梱する。個別に選びたい場合は各スキル名のプラグインを使う。",
       "author": {
         "name": "InumberX"
       },
       "category": "development",
       "tags": ["bundle", "all", "workflow", "conventions"]
+    },
+    {
+      "name": "create-branch",
+      "source": "./skills/create-branch",
+      "description": "作業用ブランチの作成手順(作業ツリーの確認 → ベース判定 → 最新のリモートから --no-track で作成)と、<prefix>/<slug> の命名規約。GitHub Flow と、develop を持つ簡略版の Git Flow の両方を扱う。push と PR の作成は create-pr に委譲する。",
+      "author": {
+        "name": "InumberX"
+      },
+      "category": "development",
+      "tags": ["git", "branch", "workflow", "conventions"]
     },
     {
       "name": "create-pr",
