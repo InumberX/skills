@@ -167,6 +167,16 @@ class TestCheck(unittest.TestCase):
         md = self.write_skill("do-thing", frontmatter("do-thing", f'description: "{text}"'))
         self.assert_error_contains(validate_skills.check(md), "the limit is 1024")
 
+    def test_description_with_placeholder_tags(self):
+        md = self.write_skill(
+            "do-thing", frontmatter("do-thing", 'description: "Name it <prefix>/<slug>."')
+        )
+        self.assert_error_contains(validate_skills.check(md), "must not contain `<` or `>`")
+
+    def test_description_with_lone_angle_bracket(self):
+        md = self.write_skill("do-thing", frontmatter("do-thing", 'description: "Map a -> b."'))
+        self.assert_error_contains(validate_skills.check(md), "must not contain `<` or `>`")
+
     def test_description_length_counts_characters_not_bytes(self):
         text = "あ" * 1024
         md = self.write_skill("do-thing", frontmatter("do-thing", f'description: "{text}"'))

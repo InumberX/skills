@@ -38,12 +38,13 @@ description: "Create a new Agent Skill following ... Use whenever the user asks 
 ---
 ```
 
-- `description` の値は**ダブルクォートで囲む**。自然文には `:` や `#` が紛れ込みやすく、引用符なしの YAML ではパースが壊れてスキルが発見されなくなる事故につながるため。**この規約（frontmatter が YAML として妥当か・`name`/`description` の有無・`name` のケバブケースとディレクトリ一致・`description` のダブルクォート・長さ）は `scripts/validate_skills.py` が機械的に検査し、`.github/workflows/validate.yml` が push(main) と全 PR で自動実行する。** 実際に merge をブロックする「必須チェック」にするかはリポジトリのブランチ保護設定に依存する。ローカルでも `python3 scripts/validate_skills.py` で確認できる（PyYAML が必要。Python は 3.10 以上を推奨。CI は 3.12 を使用）
+- `description` の値は**ダブルクォートで囲む**。自然文には `:` や `#` が紛れ込みやすく、引用符なしの YAML ではパースが壊れてスキルが発見されなくなる事故につながるため。**この規約（frontmatter が YAML として妥当か・`name`/`description` の有無・`name` のケバブケースとディレクトリ一致・`description` のダブルクォート・長さ・`<` `>` を含まないこと）は `scripts/validate_skills.py` が機械的に検査し、`.github/workflows/validate.yml` が push(main) と全 PR で自動実行する。** 実際に merge をブロックする「必須チェック」にするかはリポジトリのブランチ保護設定に依存する。ローカルでも `python3 scripts/validate_skills.py` で確認できる（PyYAML が必要。Python は 3.10 以上を推奨。CI は 3.12 を使用）
 
 - `name`: ディレクトリ名と一致させる。64 文字まで
 - `description`: 1024 文字まで（Agent Skills の仕様の上限。超えると、読み込む側で拒否されたり切り詰められたりする）。**英語**で書く（本リポジトリの規約。ツール側のマッチング精度が安定し、after_works-v006 / sugidama で実運用中のスキルとも揃う）。次の 2 要素を必ず含める:
   1. 何をするスキルか
   2. **いつ使うか** — ユーザーの依頼パターンを具体的に列挙する（「Use when the user asks to ...」）。発動判断は description だけで行われるため、ここに書いていない発動条件は存在しないのと同じ。本文の「いつ発動するか」は description の詳細化であって代わりにはならない
+- `description` に `<` と `>` を書かない。claude.ai はアップロード時に「description cannot contain XML tags」として拒否し、`<name>` のようなプレースホルダーもタグとみなされる。形式を示すときは `prefix/slug` のように括弧なしで書くか、具体例を挙げる
 - スキルが増えて必要になったら、version・tags・compatible などは frontmatter の `metadata` フィールドに追加する（独自の YAML ファイルは作らない）
 
 ## 本文の言語
