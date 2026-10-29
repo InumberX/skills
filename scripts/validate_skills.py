@@ -14,6 +14,9 @@ Checks per SKILL.md:
   6. `name` is at most 64 characters and `description` at most 1024, the limits
      of the Agent Skills specification. A longer value may be rejected or cut
      off by the agent that loads the skill.
+  7. `description` contains no `<` or `>`. claude.ai rejects an upload whose
+     description contains XML tags, and a placeholder such as `<name>` counts
+     as one.
 
 Exit code is non-zero if any skill fails.
 """
@@ -84,6 +87,12 @@ def check(skill_md: Path) -> list[str]:
             errors.append(
                 f"`description` is {len(description)} characters;"
                 f" the limit is {MAX_DESCRIPTION_LENGTH}"
+            )
+        if "<" in description or ">" in description:
+            # claude.ai refuses the upload ("description cannot contain XML tags"),
+            # and a placeholder like `<prefix>/<slug>` is enough to trigger it.
+            errors.append(
+                "`description` must not contain `<` or `>`; claude.ai rejects XML tags in it"
             )
         if description_scalar_style(front) != '"':
             # format.md: the description value must be a double-quoted YAML scalar.

@@ -1,6 +1,6 @@
 ---
 name: <kebab-case-verb-phrase>
-description: "<What this skill does + when to use it, in English. Include concrete request patterns, e.g. 'Use when the user asks to ...'>"
+description: "TODO: What this skill does + when to use it, in English. Include concrete request patterns, e.g. 'Use when the user asks to ...'. Do not use angle brackets here."
 ---
 
 # <skill-name>
