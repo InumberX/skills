@@ -1,6 +1,6 @@
 ---
 name: verify-completion
-description: "Verify a change before reporting it as done — decide what the change could affect (callers, parent screens, paired elements, other viewports), check each with a concrete method (side-by-side Storybook, computed styles, a 375px overflow check, rendered Markdown, redirect counts, undefined CSS variables), and report what was confirmed, what was not run, and what could not be reproduced, separately. Use before saying a fix or task is complete, when the user asks to verify, double-check, or confirm a change, asks 'is it really fixed?', or asks for a final check before a PR or deploy."
+description: "Verify a change before reporting it as done — decide what the change could affect (callers, parent screens, paired elements, other viewports), check each with a concrete method (side-by-side Storybook, computed styles, a 375px overflow check, transitions sampled with the Web Animations API, rendered Markdown, redirect counts, undefined CSS variables, and a test that fails when each behavior change claimed in the PR body is reverted), and report what was confirmed, what was not run, and what could not be reproduced, separately. Use before saying a fix or task is complete, when the user asks to verify, double-check, or confirm a change, asks 'is it really fixed?', or asks for a final check before a PR or deploy."
 ---
 
 # verify-completion
@@ -24,7 +24,7 @@ lint・typecheck・テストで検出できるものは、それらを実行し�
 | 変更の種類 | 参照ファイル |
 | --- | --- |
 | 画面・スタイル・コンポーネント・画像 | `rules/ui.md` |
-| Issue / PR の本文、ドキュメント、リンク、生成物 | `rules/content.md` |
+| Issue / PR の本文（本文に書いた挙動の変化とテストの対応を含む）、ドキュメント、リンク、生成物 | `rules/content.md` |
 
 ## 手順
 

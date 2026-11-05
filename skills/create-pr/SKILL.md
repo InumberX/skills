@@ -1,11 +1,11 @@
 ---
 name: create-pr
-description: "Open a pull request following these projects' conventions — determine the base branch, check the push target and run the project's checks before pushing, assemble the diff, write a prefix-style title and a body that fills the repo's PR template (or the standard checklist when none exists), then create it via the GitHub MCP tools. Also covers splitting mixed work into separate PRs, stacking PRs that touch the same lines, and rolling the same change out to several repositories. Use when the user asks to create, open, or raise a pull request. Message/body wording conventions come from the write-commit skill."
+description: "Open a pull request following these projects' conventions — determine the base branch, check the push target and run the project's checks before pushing, assemble the diff (and bring the linked issue's implementation-plan comment in line with it, with the user's confirmation), write a prefix-style title and a body that fills the repo's PR template (or the standard checklist when none exists), then create it via the GitHub MCP tools. Also covers splitting mixed work into separate PRs, stacking PRs that touch the same lines, and rolling the same change out to several repositories. Use when the user asks to create, open, or raise a pull request. Message/body wording conventions come from the write-commit skill."
 ---
 
 # create-pr
 
-Pull Request を作成する**手順**を担うスキル。タイトル・本文の**文面規約は `write-commit` スキル**に委ね、本スキルは「ベース判定 → push 前の確認 → 差分集約 → テンプレ検出 → 作成」という作業フローと、環境依存の確認ポイントを提供する。ベースブランチ・テンプレート・ブランチ命名/ラベル運用は**プロジェクトごとに異なるため、都度検出して従う**（`AGENTS.md` / `.github/` を優先）。
+Pull Request を作成する**手順**を担うスキル。タイトル・本文の**文面規約は `write-commit` スキル**に委ね、本スキルは「ベース判定 → push 前の確認 → 差分集約と Issue の実装方針の更新 → テンプレ検出 → 作成」という作業フローと、環境依存の確認ポイントを提供する。ベースブランチ・テンプレート・ブランチ命名/ラベル運用は**プロジェクトごとに異なるため、都度検出して従う**（`AGENTS.md` / `.github/` を優先）。
 
 ## いつ発動するか
 
@@ -59,6 +59,12 @@ PR 作成の依頼はまず本スキルが受け、タイトル・本文の**文
 ### 5. 差分を集約する
 
 `git diff <base>...HEAD --stat` と `git log <base>..HEAD --oneline` で、PR に含まれる変更全体を把握する。タイトル・本文は**この全体差分**に基づいて書く（最後の 1 コミットだけを見ない）。
+
+紐づく Issue に、実装に入る前の実装方針（仕様・対象・進め方）をコメントとして書いている場合は、この全体差分と突き合わせる。実装中に決め直したこと（閾値・表示の仕方・追加した呼び出しなど）や、今回は対応せず後に回したことがあれば、PR を作る前にそのコメントを更新する。Issue の方針は、マージ後も仕様の参照先として読まれるため、実装とずれたまま残すと、後から読む人が Issue と PR 本文のどちらが正しいか判断できない。
+
+- 更新するのは、ユーザー自身が書いたコメントに限る。ほかの人のコメントは書き換えず、ずれている点を PR 本文に書く
+- Issue のコメントはほかの人にも見えるので、書き換える前に、変更点をユーザーに示して確かめる
+- 新しいコメントを足すのではなく、元のコメントを書き換える。足すだけだと、古い方針が先に読まれる。ただし、そのコメントに返信が付いている場合は、書き換えると返信の文脈が崩れるので、元のコメントは残して更新版を新しいコメントとして足し、元のコメントの冒頭に更新版への案内を書く
 
 ### 6. タイトルを書く
 
