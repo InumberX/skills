@@ -43,13 +43,15 @@ gh pr list --repo OWNER/REPO --author LOGIN --state all --limit 50 \
 PR のコメントは 3 か所に分かれている。`gh pr view --comments` は行に付いたコメントを含まないので、API で 3 種類とも取る。
 
 ```bash
-gh api repos/OWNER/REPO/pulls/NUMBER/reviews \
-  --jq '.[] | select(.body != "") | "[review \(.state) by \(.user.login)]\n\(.body)\n"'
-gh api repos/OWNER/REPO/pulls/NUMBER/comments \
-  --jq '.[] | "[inline by \(.user.login) \(.path):\(.line // .original_line)]\n\(.body)\n"'
-gh api repos/OWNER/REPO/issues/NUMBER/comments \
-  --jq '.[] | "[comment by \(.user.login)]\n\(.body)\n"'
+gh api --paginate repos/OWNER/REPO/pulls/NUMBER/reviews \
+  --jq '.[] | select(.body != "") | "[review \(.state) by \(.user.login) at \(.submitted_at)]\n\(.body)\n"'
+gh api --paginate repos/OWNER/REPO/pulls/NUMBER/comments \
+  --jq '.[] | "[inline by \(.user.login) at \(.created_at) \(.path):\(.line // .original_line)]\n\(.body)\n"'
+gh api --paginate repos/OWNER/REPO/issues/NUMBER/comments \
+  --jq '.[] | "[comment by \(.user.login) at \(.created_at)]\n\(.body)\n"'
 ```
+
+`--paginate` は省かない。REST API は 1 ページに 30 件までしか返さず、超えた分は何も言わずに欠ける。`--jq` はページごとに適用されるので、式はそのままでよい。日時は、次の手順で指摘とコミットの前後を比べるために出す。
 
 | 種類 | 取得先 | 含まれるもの |
 | --- | --- | --- |
@@ -69,11 +71,14 @@ gh api repos/OWNER/REPO/issues/NUMBER/comments \
 
 ### 5. 対応を確かめる
 
-各指摘について、どう対応されたかを確かめる。ユーザーの返信と、指摘の後に足されたコミットを見る。
+各指摘について、どう対応されたかを確かめる。ユーザーの返信と、指摘の後に足されたコミットを見る。コミットの日時を、手順 3 で出した指摘の日時と比べる。
 
 ```bash
-gh pr view NUMBER --repo OWNER/REPO --json commits --jq '.commits[].messageHeadline'
+gh pr view NUMBER --repo OWNER/REPO --json commits \
+  --jq '.commits[] | "\(.committedDate) \(.messageHeadline)"'
 ```
+
+行のコメントは、レビューのスレッドが「解決済み」にされているかも判断の材料になる。解決の状態は REST API では取れないので、必要なら GraphQL の `reviewThreads` の `isResolved` を見る。解決済みでも、修正されたとは限らない（返信だけで閉じられることがある）ので、コミットと合わせて判断する。
 
 | 対応 | 判断の材料 |
 | --- | --- |

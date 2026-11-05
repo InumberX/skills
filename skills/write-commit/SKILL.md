@@ -1,6 +1,6 @@
 ---
 name: write-commit
-description: "Write commit messages and pull request descriptions that follow these projects' shared conventions — short lowercase conventional-style prefixes (feat:/fix:/refactor:/perf:/docs:/test:/ci:/build:/chore:/revert:, with chore(deps): for dependency updates), focused imperative subjects, and a PR body covering summary, linked issue, and local-check confirmation (only checks that actually ran). Also decides the title/body language, keeps the body in sync after review fixes, and updates an implementation-plan comment on the linked issue when the implementation diverged from it. Use when the user asks to commit changes, write a commit message, write or update a PR title/body; the PR-creation workflow itself lives in the create-pr skill, which calls this skill for wording."
+description: "Write commit messages and pull request descriptions that follow these projects' shared conventions — short lowercase conventional-style prefixes (feat:/fix:/refactor:/perf:/docs:/test:/ci:/build:/chore:/revert:, with chore(deps): for dependency updates), focused imperative subjects, and a PR body covering summary, linked issue, and local-check confirmation (only checks that actually ran). Also decides the title/body language and keeps the body in sync after review fixes. Use when the user asks to commit changes, write a commit message, write or update a PR title/body; the PR-creation workflow itself lives in the create-pr skill, which calls this skill for wording."
 ---
 
 # write-commit
@@ -90,14 +90,6 @@ PR タイトルもコミットと同じプレフィックス規約に従う。
 ### レビュー対応で PR 本文を更新する
 
 レビュー指摘に対応するコミットを push したら、指摘への返信を書く前に、PR 本文の該当する節（変更内容・確認したこと）を差分と突き合わせて更新する。本文が古いままだと、後から読む人は本文と差分のどちらが正しいか判断できない。
-
-### Issue に書いた実装方針を合わせる
-
-実装に入る前に、Issue のコメントとして実装方針（仕様・対象・進め方）を書いた場合は、PR を作る前に、そのコメントを実装と突き合わせて更新する。実装中に決め直したこと（閾値・表示の仕方・追加した API の呼び出しなど）と、今回は対応せず後に回したことを反映する。
-
-Issue の方針は、PR がマージされた後も「この機能はどういう仕様か」を確かめる場所として読まれる。実装とずれたまま残ると、後から読む人は Issue と PR 本文のどちらが正しいか判断できない。PR 本文から方針のコメントへリンクしている場合は、なおさらである。
-
-方針のコメントは書き換えて更新し、更新したことが分かるように PR 本文か、方針のコメントの末尾に一言添える。新しいコメントを足すだけにすると、古い方針が先に読まれる。
 
 > **プロジェクト固有の運用に注意**: ブランチ命名による自動ラベル付け（例: `feature/*` → enhancement、`bugfix/*` / `hotfix/*` → bug）など、リポジトリごとに異なる運用がある。**中央の本スキルには固有ルールを書かず、対象プロジェクトの `AGENTS.md` を確認して従う。**
 
