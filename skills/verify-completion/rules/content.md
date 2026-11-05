@@ -7,12 +7,14 @@
 ```bash
 gh api -X POST markdown -F text=@body.md -f mode=gfm > rendered.html
 grep -o 'type="checkbox"' rendered.html | wc -l   # チェックボックスの数
-grep -o '<table>' rendered.html | wc -l           # 表の数
-grep -o '<details>' rendered.html | wc -l         # 折りたたみの数
+grep -oE '<table[ >]' rendered.html | wc -l       # 表の数
+grep -oE '<details[ >]' rendered.html | wc -l     # 折りたたみの数
 grep -o '<h2' rendered.html | wc -l               # 見出しの数
 ```
 
 `grep -c` は一致した行の数を数えるため、1 行に複数あると少なく出る。`grep -o` で一致した箇所を 1 件ずつ出してから数える。
+
+タグは閉じ括弧まで含めて検索しない。GitHub の描画結果は `<table role="table">` のように属性を付けて出力することがあり、`<table>` で検索すると 0 件になって、表が崩れたと誤って判断する。タグ名の直後が空白か `>` であることだけを条件にする。
 
 ソースに書いた数と、描画結果の数が一致することを確かめてから完了にする。チェックボックスと見出しは、ソース側も機械的に数えられる。表と折りたたみは、ソースを見て数える。
 
