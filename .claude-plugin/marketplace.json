@@ -8,7 +8,7 @@
     {
       "name": "inumberx-skills",
       "source": "./",
-      "description": "全スキルを一括導入する全部入りプラグイン(create-branch / create-pr / create-skill / hand-off-context / investigate-failure / record-lesson / refine-request / rename-or-delete / review-pr / verify-completion / write-commit)。review-pr にはフレームワーク/プラットフォーム由来のセキュリティ観点とレビューの進め方(rules/process.md)も同梱する。個別に選びたい場合は各スキル名のプラグインを使う。",
+      "description": "全スキルを一括導入する全部入りプラグイン(create-branch / create-pr / create-skill / hand-off-context / investigate-failure / recall-review-feedback / record-lesson / refine-request / rename-or-delete / review-pr / verify-completion / write-commit)。review-pr にはフレームワーク/プラットフォーム由来のセキュリティ観点とレビューの進め方(rules/process.md)も同梱する。個別に選びたい場合は各スキル名のプラグインを使う。",
       "author": {
         "name": "InumberX"
       },
@@ -64,6 +64,16 @@
       },
       "category": "development",
       "tags": ["debugging", "ci", "investigation", "workflow"]
+    },
+    {
+      "name": "recall-review-feedback",
+      "source": "./skills/recall-review-feedback",
+      "description": "あるリポジトリで作業を始める前に、ユーザー自身の過去の PR に付いたレビューの指摘を集める。レビュー本文・行のコメント・会話のコメントの 3 種類を取得し、承認や自分の返信を除いて、各指摘の対応状況を確かめ、次の作業で守る形に書き直す。",
+      "author": {
+        "name": "InumberX"
+      },
+      "category": "development",
+      "tags": ["review", "feedback", "pull-request", "workflow"]
     },
     {
       "name": "record-lesson",
