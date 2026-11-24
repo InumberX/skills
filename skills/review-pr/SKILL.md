@@ -1,6 +1,6 @@
 ---
 name: review-pr
-description: "Review a pull request against a project's style, naming, and structural conventions, and against framework- and platform-level security checks scoped to the changed files. Use when the user asks for a PR review, code review, or review of pending changes — including narrowed-scope requests like 'review the styling', 'check the naming', or 'check these changes for security issues'. Provides the cross-project review procedure and output format; style rules live in each project's own .claude/skills/review-pr/rules/, while the security rules, the language-agnostic rules for code comments (no change history, claims checked against the code) and for disclosure buttons (aria-expanded and aria-controls), and the review process rules (checking library behavior against the project's installed version, identifying same-name functions by path and signature, confirming who handles user-submitted data, staying within the requested scope) ship with this skill."
+description: "Review a pull request against a project's style, naming, and structural conventions, and against framework- and platform-level security checks scoped to the changed files. Use when the user asks for a PR review, code review, or review of pending changes — including narrowed-scope requests like 'review the styling', 'check the naming', or 'check these changes for security issues'. Provides the cross-project review procedure and output format; style rules live in each project's own .claude/skills/review-pr/rules/, while the security rules, the language-agnostic rules for code comments (no comments that restate the code or have gone stale, no change history, claims checked against the code) and for disclosure buttons (aria-expanded and aria-controls), and the review process rules (checking library behavior against the project's installed version, identifying same-name functions by path and signature, confirming who handles user-submitted data, staying within the requested scope) ship with this skill."
 ---
 
 # review-pr
@@ -55,7 +55,7 @@ description: "Review a pull request against a project's style, naming, and struc
 | 「ディレクトリ構造」「ファイル配置」 | `rules/style/structure.md` |
 | 「セキュリティ」「安全性」「脆弱性」 | 本スキルの `rules/security/`（下記の検出条件に一致するもの）のみ |
 
-プロジェクトが `rules/a11y/`・`rules/performance/`・`rules/i18n/` 等を追加していれば、同様に依頼内容へマッピングする。本スキル同梱の汎用観点は、差分の内容で読む。コメントの追加・変更があれば `rules/code/comments.md`、押すと領域が開閉するボタンの追加・変更があれば `rules/a11y/disclosure.md` を読む。範囲を絞ったレビュー（「命名だけ」など）では、依頼された範囲に含まれるときだけ読む。範囲の外で気づいたことは、出力の「範囲外で気づいたこと」に分ける（`rules/process.md`「レビューの範囲」）。
+プロジェクトが `rules/a11y/`・`rules/performance/`・`rules/i18n/` 等を追加していれば、同様に依頼内容へマッピングする。本スキル同梱の汎用観点は、差分の内容で読む。コメントの追加・変更、またはコメントが説明しているコードの変更があれば `rules/code/comments.md`、押すと領域が開閉するボタンの追加・変更があれば `rules/a11y/disclosure.md` を読む。範囲を絞ったレビュー（「命名だけ」など）では、依頼された範囲に含まれるときだけ読む。範囲の外で気づいたことは、出力の「範囲外で気づいたこと」に分ける（`rules/process.md`「レビューの範囲」）。
 
 セキュリティ観点だけは依頼の言葉ではなく、**リポジトリ側の構成**で読むファイルを決める。該当しないファイルは読まない。
 
