@@ -8,7 +8,7 @@
     {
       "name": "inumberx-skills",
       "source": "./",
-      "description": "全スキルを一括導入する全部入りプラグイン(create-branch / create-pr / create-skill / hand-off-context / investigate-failure / recall-review-feedback / record-lesson / refine-request / rename-or-delete / review-pr / verify-completion / write-commit)。review-pr にはフレームワーク/プラットフォーム由来のセキュリティ観点、汎用の観点(rules/code/comments.md・rules/a11y/disclosure.md)とレビューの進め方(rules/process.md)も同梱する。個別に選びたい場合は各スキル名のプラグインを使う。",
+      "description": "全スキルを一括導入する全部入りプラグイン(create-branch / create-pr / create-skill / hand-off-context / investigate-failure / recall-review-feedback / record-lesson / refine-request / rename-or-delete / review-pr / set-up-agent-rules / verify-completion / write-commit)。review-pr にはフレームワーク/プラットフォーム由来のセキュリティ観点、汎用の観点(rules/code/comments.md・rules/a11y/disclosure.md)とレビューの進め方(rules/process.md)も同梱する。個別に選びたい場合は各スキル名のプラグインを使う。",
       "author": {
         "name": "InumberX"
       },
@@ -114,6 +114,16 @@
       },
       "category": "development",
       "tags": ["review", "code-review", "pull-request", "quality", "security"]
+    },
+    {
+      "name": "set-up-agent-rules",
+      "source": "./skills/set-up-agent-rules",
+      "description": "共有の基本コーディングルール(例: コメントのルール)を、常に読み込まれる CLAUDE.md / AGENTS.md(指定があればユーザー単位の指示ファイル)に書き込み、レビュー時だけでなくコーディング中にも効くようにする。既存の同趣旨・食い違うルールを確かめ、開始と終了の目印で囲んだ範囲として追加し、更新時はその範囲だけを差し替える。",
+      "author": {
+        "name": "InumberX"
+      },
+      "category": "development",
+      "tags": ["claude-md", "agents-md", "conventions", "workflow"]
     },
     {
       "name": "verify-completion",
